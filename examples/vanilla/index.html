@@ -31,9 +31,12 @@
 
       // One line to start. `onEvent` is the public hook used here to mirror
       // events onto the page (it's also how the debug overlay + tests subscribe).
+      // The api_key is a public, browser-embeddable write key (prefix
+      // revu_pk_). Replace "revu_pk_demo_replace_me" with your own key
+      // from the REVU dashboard. The default host points at the REVU API.
       revu.init({
-        apiKey: "demo",
-        host: "http://localhost:3000",
+        apiKey: "revu_pk_demo_replace_me",
+        host: "http://localhost:4000",
         debug: true,
         onEvent: (e) => {
           const line = document.createElement("div");
