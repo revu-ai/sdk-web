@@ -6,6 +6,7 @@
 const DEFAULTS = {
   host: "https://api.revu.ai",
   autocapture: true,
+  autoIdentify: true,
   maskAllInputs: true,
   flushIntervalMs: 5000,
   flushAt: 20,

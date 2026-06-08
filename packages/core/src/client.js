@@ -13,7 +13,7 @@ export class RevuClient {
   /** @param {import("./types.js").ResolvedConfig} config */
   constructor(config) {
     this.config = config;
-    this.identity = new Identity();
+    this.identity = new Identity({ autoIdentify: config.autoIdentify });
     this.transport = new Transport({
       host: config.host,
       apiKey: config.apiKey,

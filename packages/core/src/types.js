@@ -10,6 +10,7 @@
  * @property {string} apiKey               Public ingest write-key (org/entity resolved server-side).
  * @property {string} [host="https://api.revu.ai"] Ingest host base URL (the API service, not the app/dashboard).
  * @property {boolean} [autocapture=true]  Auto-capture clicks + page views with no instrumentation.
+ * @property {boolean} [autoIdentify=true] Auto-generate a persistent user id on first visit so every event arrives attributed to a stable visitor. Explicit `identify()` always overrides and is also persisted. Set to false to keep `user_id` null until the host app calls `identify()`.
  * @property {boolean} [maskAllInputs=true] Never read input field values (redact-at-source).
  * @property {number} [flushIntervalMs=5000] Max time before a partial batch is sent.
  * @property {number} [flushAt=20]         Queue size that triggers an immediate flush.
@@ -44,7 +45,7 @@
  * @typedef {object} RevuEvent
  * @property {string} event_id             Client-generated UUID - idempotency/dedupe key.
  * @property {string} anonymous_id         First-party device/session UUID.
- * @property {string|null} user_id         Customer account id once identified, else null.
+ * @property {string|null} user_id         Identified visitor id. With autoIdentify (default), a persistent UUID is assigned on first visit and stays attached until the host app overrides it via identify(). With autoIdentify off, null until identify() is called.
  * @property {string} session_id           Per-session UUID.
  * @property {number} sequence_no          Per-session monotonic counter (gap = loss).
  * @property {"web"} platform              Capture platform.

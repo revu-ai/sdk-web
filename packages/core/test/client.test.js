@@ -21,6 +21,11 @@ function makeClient() {
     apiKey: "revu_pk_test_1234567890",
     host: "https://api.test",
     autocapture: false,
+    // These tests focus on the explicit identify() and reset() transitions.
+    // autoIdentify is exercised separately in identity.test.js; disabling it
+    // here keeps the assertions on `previous_user_id` and "no identified
+    // user" semantics simple and isolated from the auto-id behavior.
+    autoIdentify: false,
     maskAllInputs: true,
     flushAt: 10_000,
     flushIntervalMs: 60_000,

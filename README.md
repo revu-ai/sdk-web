@@ -7,8 +7,24 @@ import revu from "@revu-ai/core";
 
 revu.init({ apiKey: "your-write-key" });
 // That's it - page views and clicks are captured automatically.
-revu.identify("user-123");                      // optional, on login
+// Every event already carries a persistent visitor id (autoIdentify).
+revu.identify("user-123");                      // on login, replaces the auto id
 revu.track("Plan Upgraded", { tier: "pro" });   // optional explicit event
+revu.reset();                                   // on logout
+```
+
+## Identity
+
+The SDK assigns every visitor a stable id on first load and keeps it across reloads, so the dashboard can attribute sessions even before the host app knows who the user is.
+
+- **`anonymousId`** - device-level id. UUID generated on first visit, persisted in localStorage, survives logout.
+- **`userId`** - person-level id. With `autoIdentify` (default), a UUID is auto-generated on first visit and persisted. Call `revu.identify("real-id")` on login - the manual id wins and is also persisted. `revu.reset()` on logout rotates to a fresh auto id (next visitor on the browser is treated as a new person).
+- **`sessionId`** - per-load id. Rotates on every page load and on `reset()`.
+
+Turn off the auto id when you want `user_id` to remain null until you explicitly identify:
+
+```js
+revu.init({ apiKey: "...", autoIdentify: false });
 ```
 
 ## Why this codebase looks the way it does
