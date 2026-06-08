@@ -68,21 +68,24 @@ export class PersistentQueue {
   }
 
   /**
-   * Write `items` to storage. On quota errors, drop the oldest half and retry
-   * once; if it still fails, give up silently (the in-memory copy is intact and
-   * remains flushable this session). Never throws.
+   * Write `items` to storage. On quota errors, retry once persisting just the
+   * recent half; if that still fails, give up silently. The in-memory copy is
+   * never mutated by persistence: it stays the source of truth for this session
+   * and remains flushable even when storage is full. Never throws.
    */
   persist() {
     if (!this.storage) return;
     try {
       this.storage.setItem(this.key, JSON.stringify(this.items));
+      return;
     } catch {
-      try {
-        this.items.splice(0, Math.ceil(this.items.length / 2));
-        this.storage.setItem(this.key, JSON.stringify(this.items));
-      } catch {
-        // Give up. Durability is best-effort; never crash the host over storage.
-      }
+      // Fall through to the half-size retry below.
+    }
+    try {
+      const tail = this.items.slice(Math.ceil(this.items.length / 2));
+      this.storage.setItem(this.key, JSON.stringify(tail));
+    } catch {
+      // Give up. Durability is best-effort; never crash the host over storage.
     }
   }
 
