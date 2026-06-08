@@ -245,4 +245,91 @@ describe("Transport", () => {
     expect(t.queue.size()).toBe(0);
     clearInterval(t.timer ?? undefined);
   });
+
+  test("backoff grows exponentially with each consecutive failure", () => {
+    // Test the math directly via scheduleBackoff(). The integrated flush()
+    // path is covered above; here we lock in the growth curve so a future
+    // regression that flattens or reverses backoff is caught.
+    const { t } = makeTransport();
+    /** @type {number[]} */
+    const deltas = [];
+    for (let i = 0; i < 6; i++) {
+      const before = Date.now();
+      t.scheduleBackoff();
+      deltas.push(t.backoffUntil - before);
+    }
+    // BACKOFF_BASE_MS = 1000, doubling: 1000, 2000, 4000, 8000, 16000, 32000.
+    // We allow up to +50ms of clock drift between the `before` capture and
+    // the internal Date.now() inside scheduleBackoff().
+    expect(deltas[0]).toBeGreaterThanOrEqual(1000);
+    expect(deltas[0]).toBeLessThan(1100);
+    expect(deltas[1]).toBeGreaterThanOrEqual(2000);
+    expect(deltas[1]).toBeLessThan(2100);
+    expect(deltas[2]).toBeGreaterThanOrEqual(4000);
+    expect(deltas[3]).toBeGreaterThanOrEqual(8000);
+    expect(deltas[4]).toBeGreaterThanOrEqual(16000);
+    expect(deltas[5]).toBeGreaterThanOrEqual(32000);
+    // Strictly monotonic up to the cap.
+    for (let i = 1; i < deltas.length; i++) {
+      expect(deltas[i]).toBeGreaterThan(deltas[i - 1]);
+    }
+  });
+
+  test("backoff is capped at 60s (no runaway delays)", () => {
+    const { t } = makeTransport();
+    // Drive past the doubling curve into the cap.
+    for (let i = 0; i < 12; i++) t.scheduleBackoff();
+    const before = Date.now();
+    t.scheduleBackoff();
+    const delta = t.backoffUntil - before;
+    expect(delta).toBeLessThanOrEqual(60_000);
+    // Sanity: a misconfigured cap (e.g. accidental `BACKOFF_BASE_MS`) would
+    // collapse this to ~1s. We want to be safely inside the 60s neighborhood.
+    expect(delta).toBeGreaterThanOrEqual(59_990);
+  });
+
+  test("a successful flush after a failure resets failures and backoffUntil", async () => {
+    mockFetch(() => Promise.resolve(new Response("", { status: 503 })));
+    const { t } = makeTransport();
+    t.enqueue(makeEvent(1));
+    await t.flush();
+    expect(t.failures).toBe(1);
+    expect(t.backoffUntil).toBeGreaterThan(Date.now());
+
+    // Simulate the backoff window expiring (real time would do this).
+    t.backoffUntil = 0;
+
+    mockFetch(() => Promise.resolve(new Response("", { status: 200 })));
+    const ok = await t.flush();
+
+    expect(ok).toBe(true);
+    expect(t.failures).toBe(0);
+    expect(t.backoffUntil).toBe(0);
+    expect(t.queue.size()).toBe(0);
+  });
+
+  test("start() wires a 'pagehide' listener that flushes via sendBeacon", async () => {
+    const sendBeacon = mock(() => true);
+    /** @type {any} */ (navigator).sendBeacon = sendBeacon;
+    const fetchMock = mockFetch(() =>
+      Promise.resolve(new Response("", { status: 200 })),
+    );
+
+    const { t } = makeTransport();
+    // Wire listeners FIRST while the queue is empty: start() flushes on its
+    // own when there is leftover data, which would otherwise take the fetch
+    // path and confuse the "fetch must not be called" assertion below.
+    t.start();
+    t.enqueue(makeEvent(1));
+
+    window.dispatchEvent(new Event("pagehide"));
+    await tick();
+
+    // pagehide path must take the beacon, NOT fetch: keepalive fetch under
+    // unload is unreliable across browsers, which is why we wired beacon.
+    expect(sendBeacon).toHaveBeenCalledTimes(1);
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(t.queue.size()).toBe(0);
+    clearInterval(t.timer ?? undefined);
+  });
 });
