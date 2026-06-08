@@ -1,0 +1,6 @@
+# Bun runtime config. Preload happy-dom's global registrator before every
+# `bun test` run so DOM-touching modules (capture, transport, queue) see a real
+# `window`, `document`, `localStorage`, `history`, and `navigator`. The setup
+# script is idempotent, so non-DOM tests are unaffected.
+[test]
+preload = ["./packages/core/test/setup.js"]

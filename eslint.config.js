@@ -35,6 +35,9 @@ export default [
         clearTimeout: "readonly",
         crypto: "readonly",
         URL: "readonly",
+        Response: "readonly",
+        Event: "readonly",
+        PopStateEvent: "readonly",
         // DOM types used in JSDoc casts.
         Element: "readonly",
         MouseEvent: "readonly",

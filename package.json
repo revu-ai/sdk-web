@@ -6,9 +6,14 @@
   "description": "REVU Web SDK monorepo - one-line autocapture + opt-in modules. Vanilla JS + JSDoc; types generated at build.",
   "author": "Tarek Raafat",
   "license": "Apache-2.0",
-  "repository": { "type": "git", "url": "git+https://github.com/revu-ai/sdk-web.git" },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/revu-ai/sdk-web.git"
+  },
   "workspaces": ["packages/*"],
-  "engines": { "bun": ">=1.2.0" },
+  "engines": {
+    "bun": ">=1.2.0"
+  },
   "scripts": {
     "build": "bun run --filter '*' build",
     "types": "bun run --filter '*' types",
@@ -18,6 +23,7 @@
     "size": "bun run --filter '*' size"
   },
   "devDependencies": {
+    "@happy-dom/global-registrator": "^20.10.2",
     "@size-limit/preset-small-lib": "^11",
     "eslint": "^9",
     "prettier": "^3",
