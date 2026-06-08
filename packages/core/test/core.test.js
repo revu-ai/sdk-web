@@ -19,6 +19,43 @@ describe("config", () => {
     // @ts-expect-error - intentionally invalid
     expect(() => resolveConfig({})).toThrow();
   });
+
+  test("accepts a custom https host", () => {
+    const c = resolveConfig({ apiKey: "k", host: "https://example.com" });
+    expect(c.host).toBe("https://example.com");
+  });
+
+  test("accepts http://localhost for dev", () => {
+    const c = resolveConfig({ apiKey: "k", host: "http://localhost:4000" });
+    expect(c.host).toBe("http://localhost:4000");
+  });
+
+  test("rejects a malformed host string", () => {
+    expect(() =>
+      // @ts-expect-error - intentionally invalid
+      resolveConfig({ apiKey: "k", host: "not a url" }),
+    ).toThrow(/host must be a valid URL/);
+  });
+
+  test("rejects a non-http(s) scheme", () => {
+    expect(() =>
+      resolveConfig({ apiKey: "k", host: "ftp://example.com" }),
+    ).toThrow(/http: or https:/);
+    expect(() =>
+      resolveConfig({ apiKey: "k", host: "javascript:alert(1)" }),
+    ).toThrow(/http: or https:/);
+  });
+
+  test("rejects a non-string host", () => {
+    expect(() =>
+      // @ts-expect-error - intentionally invalid
+      resolveConfig({ apiKey: "k", host: 123 }),
+    ).toThrow(/host must be a non-empty string/);
+    expect(() =>
+      // @ts-expect-error - intentionally invalid
+      resolveConfig({ apiKey: "k", host: "" }),
+    ).toThrow(/host must be a non-empty string/);
+  });
 });
 
 describe("utils", () => {
