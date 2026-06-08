@@ -70,11 +70,26 @@ export class RevuClient {
   }
 
   /**
-   * Associate the current anonymous id with a known user id.
+   * Associate the current anonymous id with a known user id, and emit a
+   * synthetic `$identify` event so a dashboard can pinpoint the exact
+   * moment in the session timeline when identification happened.
+   *
+   * Idempotent: calling identify() repeatedly with the same userId is a
+   * no-op (no duplicate $identify events). Non-string or empty userIds
+   * are also no-ops. When identification transitions from one userId to
+   * another, the emitted event's `properties.previous_user_id` carries
+   * the prior value so the dashboard can render the change.
+   *
    * @param {string} userId
    */
   identify(userId) {
+    if (typeof userId !== "string" || userId.length === 0) return;
+    if (this.identity.userId === userId) return;
+    const previousUserId = this.identity.userId;
     this.identity.identify(userId);
+    this.record("$identify", {
+      properties: previousUserId ? { previous_user_id: previousUserId } : {},
+    });
   }
 
   /** Send any buffered events now. @returns {Promise<boolean>} */
