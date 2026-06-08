@@ -1,0 +1,25 @@
+{
+  "name": "@revu-ai/core",
+  "version": "0.0.0",
+  "description": "REVU Web SDK - lean capture core (autocapture, identity, queue, transport). Vanilla JS + JSDoc.",
+  "author": "Tarek Raafat",
+  "license": "Apache-2.0",
+  "type": "module",
+  "sideEffects": false,
+  "source": "./src/index.js",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": ["dist", "src"],
+  "scripts": {
+    "build": "bun build ./src/index.js --outdir ./dist --format esm --target browser --sourcemap=linked",
+    "types": "tsc -p tsconfig.json --outDir dist",
+    "size": "size-limit"
+  },
+  "size-limit": [
+    { "name": "core (esm, gzip)", "path": "dist/index.js", "limit": "8 kB", "gzip": true }
+  ]
+}

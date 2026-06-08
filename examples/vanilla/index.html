@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>REVU Web SDK - example</title>
+    <style>
+      body { font: 15px/1.5 system-ui, sans-serif; margin: 2rem; max-width: 720px; }
+      button, a { padding: .5rem 1rem; margin: .25rem; display: inline-block; }
+      #log { background: #0b0b0f; color: #b9a4ff; padding: 1rem; border-radius: 8px;
+             font: 12px/1.6 ui-monospace, monospace; max-height: 340px; overflow: auto; }
+      .row { color: #7fd1ff; }
+    </style>
+  </head>
+  <body>
+    <h1>REVU Web SDK - local example</h1>
+    <p>Click around and change the route. Captured events stream below (and to the console).</p>
+
+    <button id="cta">Primary action</button>
+    <button id="secondary" class="btn-secondary">Secondary</button>
+    <a href="#/pricing" id="pricing-link">Go to /pricing</a>
+
+    <h2>Captured events</h2>
+    <div id="log"></div>
+
+    <script type="module">
+      // Import straight from source - no build step (vanilla JS ESM).
+      import revu from "../../packages/core/src/index.js";
+
+      const log = document.getElementById("log");
+
+      // One line to start. `onEvent` is the public hook used here to mirror
+      // events onto the page (it's also how the debug overlay + tests subscribe).
+      revu.init({
+        apiKey: "demo",
+        host: "http://localhost:3000",
+        debug: true,
+        onEvent: (e) => {
+          const line = document.createElement("div");
+          line.className = "row";
+          line.textContent = `${e.event_type.padEnd(13)} ${e.screen}  ${e.fingerprint?.text ?? ""}`;
+          log.prepend(line);
+        },
+      });
+    </script>
+  </body>
+</html>

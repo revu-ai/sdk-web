@@ -1,0 +1,21 @@
+# Dependencies
+node_modules/
+.bun/
+
+# Build output (generated bundles + types)
+dist/
+*.tsbuildinfo
+
+# Logs / env / OS
+*.log
+.env
+.env.*
+.DS_Store
+
+# Editor
+.idea/
+.vscode/
+
+# Local-only agent instructions (not public)
+AGENTS.md
+CLAUDE.md
