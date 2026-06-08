@@ -8,11 +8,13 @@
  * User-supplied configuration passed to {@link init}.
  * @typedef {object} RevuConfig
  * @property {string} apiKey               Public ingest write-key (org/entity resolved server-side).
- * @property {string} [host="https://app.revu.ai"] Ingest host base URL.
+ * @property {string} [host="https://api.revu.ai"] Ingest host base URL (the API service, not the app/dashboard).
  * @property {boolean} [autocapture=true]  Auto-capture clicks + page views with no instrumentation.
  * @property {boolean} [maskAllInputs=true] Never read input field values (redact-at-source).
  * @property {number} [flushIntervalMs=5000] Max time before a partial batch is sent.
- * @property {number} [flushAt=20]         Batch size that triggers an immediate flush.
+ * @property {number} [flushAt=20]         Queue size that triggers an immediate flush.
+ * @property {number} [maxBatch=50]        Max events sent per request (bounds request body size).
+ * @property {number} [maxQueue=1000]      Hard cap on durably-queued events; oldest are pruned first.
  * @property {boolean} [debug=false]       Log captured events to the console.
  * @property {(event: RevuEvent) => void} [onEvent] Optional hook called for every captured event (debug overlays, tests).
  */

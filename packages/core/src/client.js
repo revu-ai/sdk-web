@@ -19,6 +19,8 @@ export class RevuClient {
       apiKey: config.apiKey,
       flushAt: config.flushAt,
       flushIntervalMs: config.flushIntervalMs,
+      maxBatch: config.maxBatch,
+      maxQueue: config.maxQueue,
       debug: config.debug,
       onEvent: config.onEvent,
     });

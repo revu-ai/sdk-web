@@ -4,11 +4,13 @@
 
 /** @type {Omit<import("./types.js").ResolvedConfig, "apiKey">} */
 const DEFAULTS = {
-  host: "https://app.revu.ai",
+  host: "https://api.revu.ai",
   autocapture: true,
   maskAllInputs: true,
   flushIntervalMs: 5000,
   flushAt: 20,
+  maxBatch: 50,
+  maxQueue: 1000,
   debug: false,
   onEvent: () => {},
 };

@@ -28,7 +28,8 @@ sdk-web/
 │       │   ├── client.js      orchestrator (identity + capture + transport)
 │       │   ├── capture.js     DOM autocapture (page views, clicks, SPA routes)
 │       │   ├── fingerprint.js element → semantic fingerprint
-│       │   ├── transport.js   batching + flush (fetch / sendBeacon)
+│       │   ├── transport.js   batching + flush (fetch / sendBeacon) + backoff
+│       │   ├── queue.js       durable offline queue (localStorage-backed)
 │       │   ├── identity.js    anonymous id + identify()
 │       │   ├── config.js      defaults + resolution
 │       │   ├── utils.js       uuid, safe(), truncate (DRY helpers)
