@@ -17,8 +17,23 @@ const USER_KEY = "revu_user_id";
 // 36-char string is good enough for assertions.
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-beforeEach(() => {
+/**
+ * Wipe both stores between tests. Storage now mirrors to cookie + LS by
+ * default, and document.cookie persists across happy-dom test runs, so
+ * an earlier test's identify("manual-id") would otherwise leak into the
+ * next test's fresh-visitor expectations.
+ */
+function clearStores() {
   if (typeof localStorage !== "undefined") localStorage.clear();
+  if (typeof document === "undefined") return;
+  for (const part of document.cookie.split("; ")) {
+    const name = part.split("=")[0];
+    if (name) document.cookie = `${name}=; Path=/; Max-Age=0; SameSite=Lax`;
+  }
+}
+
+beforeEach(() => {
+  clearStores();
 });
 
 describe("Identity > anonymous id", () => {

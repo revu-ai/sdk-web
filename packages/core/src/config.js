@@ -7,6 +7,8 @@ const DEFAULTS = {
   host: "https://api.revu.ai",
   autocapture: true,
   autoIdentify: true,
+  persistentStorage: "both",
+  cookieDomain: null,
   maskAllInputs: true,
   flushIntervalMs: 5000,
   flushAt: 20,

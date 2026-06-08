@@ -38,10 +38,17 @@ function makeClient() {
 }
 
 beforeEach(() => {
-  // The Identity layer persists the anonymous id in localStorage so reads
-  // across constructor invocations are stable. Wipe it so each test
-  // starts from a fresh visitor.
+  // Identity mirrors ids to both localStorage and a first-party cookie by
+  // default. Wipe both so each test starts from a fresh visitor; otherwise
+  // an earlier test's identify() would leak into a later test's
+  // "no identified user" expectations via the cookie that beforeEach used
+  // to ignore.
   if (typeof localStorage !== "undefined") localStorage.clear();
+  if (typeof document === "undefined") return;
+  for (const part of document.cookie.split("; ")) {
+    const name = part.split("=")[0];
+    if (name) document.cookie = `${name}=; Path=/; Max-Age=0; SameSite=Lax`;
+  }
 });
 
 describe("RevuClient > identify", () => {

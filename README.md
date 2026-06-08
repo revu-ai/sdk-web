@@ -17,14 +17,21 @@ revu.reset();                                   // on logout
 
 The SDK assigns every visitor a stable id on first load and keeps it across reloads, so the dashboard can attribute sessions even before the host app knows who the user is.
 
-- **`anonymousId`** - device-level id. UUID generated on first visit, persisted in localStorage, survives logout.
+- **`anonymousId`** - device-level id. UUID generated on first visit, persisted across reloads, survives logout.
 - **`userId`** - person-level id. With `autoIdentify` (default), a UUID is auto-generated on first visit and persisted. Call `revu.identify("real-id")` on login - the manual id wins and is also persisted. `revu.reset()` on logout rotates to a fresh auto id (next visitor on the browser is treated as a new person).
 - **`sessionId`** - per-load id. Rotates on every page load and on `reset()`.
 
-Turn off the auto id when you want `user_id` to remain null until you explicitly identify:
+Both persistent ids are mirrored to **localStorage and a first-party cookie** by default, so an eviction of one store is recoverable from the other (defends against Safari ITP wiping localStorage). Nothing client-side is truly forever though: a "Clear site data" action, private mode, or a different device all reset the ids. For cross-device, post-clear identity, pass your real auth id via `revu.identify(authUserId)` once the user logs in.
+
+Knobs:
 
 ```js
-revu.init({ apiKey: "...", autoIdentify: false });
+revu.init({
+  apiKey: "...",
+  autoIdentify: false,            // keep user_id null until identify()
+  persistentStorage: "localStorage", // drop the cookie (zero per-request bandwidth)
+  cookieDomain: ".example.com",   // share one visitor across subdomains
+});
 ```
 
 ## Why this codebase looks the way it does

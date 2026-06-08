@@ -4,8 +4,8 @@
  * Two persistent ids and one ephemeral id:
  *
  *   - anonymousId  - the device id. A UUID generated on first visit and
- *                    persisted in localStorage forever. Never tied to a
- *                    known person; survives logout.
+ *                    persisted across reloads. Never tied to a known
+ *                    person; survives logout.
  *   - userId       - the person id. With `autoIdentify` (the default), a
  *                    persistent UUID is auto-generated on first visit so
  *                    every event arrives attributed to a stable visitor.
@@ -15,58 +15,19 @@
  *                    new visitor) or clears it when autoIdentify is off.
  *   - sessionId    - per-load UUID. Always fresh on init; rotates on reset.
  *
- * Storage is best-effort: if localStorage is blocked (private mode,
- * cookies off), ids fall back to in-memory per-load values and the
- * SDK continues to function.
+ * Persistence is delegated to {@link createStorage}, which by default
+ * mirrors every id to both localStorage and a first-party cookie so the
+ * SDK survives a wider set of storage-clear scenarios (Safari ITP can
+ * evict one but leave the other; the surviving store rehydrates the
+ * other on the next read). Both stores blocked falls back to in-memory
+ * per-load ids; the SDK never crashes the host.
  */
 
+import { createStorage } from "./storage.js";
 import { uuid } from "./utils.js";
 
 const ANON_KEY = "revu_anonymous_id";
 const USER_KEY = "revu_user_id";
-
-/**
- * Read or lazily create the persistent first-party anonymous id.
- * @returns {string}
- */
-function loadAnonymousId() {
-  try {
-    const existing = localStorage.getItem(ANON_KEY);
-    if (existing) return existing;
-    const fresh = uuid();
-    localStorage.setItem(ANON_KEY, fresh);
-    return fresh;
-  } catch {
-    return uuid();
-  }
-}
-
-/**
- * Read the persisted user id (manual or auto-generated on a prior visit).
- * @returns {string|null}
- */
-function loadPersistedUserId() {
-  try {
-    return localStorage.getItem(USER_KEY) || null;
-  } catch {
-    return null;
-  }
-}
-
-/**
- * Persist (or clear, when value is null) the user id. Failures are
- * swallowed so a quota-full / cookies-disabled browser still gets a
- * working in-memory userId for the rest of the page lifetime.
- * @param {string|null} userId
- */
-function persistUserId(userId) {
-  try {
-    if (userId === null) localStorage.removeItem(USER_KEY);
-    else localStorage.setItem(USER_KEY, userId);
-  } catch {
-    // Best-effort.
-  }
-}
 
 /**
  * Manages the three layers of identity (device, person, session).
@@ -80,16 +41,44 @@ export class Identity {
    *   app calls identify(). When false, userId remains null until the
    *   host app calls identify() (or a prior identify is restored from
    *   storage).
+   * @param {import("./storage.js").StorageMode} [options.persistentStorage="both"]
+   *   Which client-side stores to use for persisting ids. "both" mirrors
+   *   to localStorage and a first-party cookie for maximum durability;
+   *   "localStorage" disables the cookie (no per-request bandwidth);
+   *   "cookie" disables localStorage.
+   * @param {string|null} [options.cookieDomain] When set (and the cookie
+   *   store is active), the cookie carries this as its Domain attribute
+   *   so the same id is shared across the host's subdomains.
    */
   constructor(options = {}) {
     /** @type {boolean} */
     this.autoIdentify = options.autoIdentify !== false;
+    /** @type {import("./storage.js").Storage} */
+    this._storage = createStorage({
+      mode: options.persistentStorage,
+      cookieDomain: options.cookieDomain,
+    });
     /** @type {string} */
-    this.anonymousId = loadAnonymousId();
+    this.anonymousId = this._loadOrGenerate(ANON_KEY);
     /** @type {string|null} */
     this.userId = this._resolveUserId();
     /** @type {string} */
     this.sessionId = uuid();
+  }
+
+  /**
+   * Read a persisted id from the configured store(s), or generate, persist,
+   * and return a fresh UUID when nothing is stored. Used for ids that must
+   * always be present (the anonymous device id).
+   * @param {string} key
+   * @returns {string}
+   */
+  _loadOrGenerate(key) {
+    const existing = this._storage.read(key);
+    if (existing) return existing;
+    const fresh = uuid();
+    this._storage.write(key, fresh);
+    return fresh;
   }
 
   /**
@@ -101,11 +90,11 @@ export class Identity {
    * @returns {string|null}
    */
   _resolveUserId() {
-    const persisted = loadPersistedUserId();
+    const persisted = this._storage.read(USER_KEY);
     if (persisted) return persisted;
     if (!this.autoIdentify) return null;
     const fresh = uuid();
-    persistUserId(fresh);
+    this._storage.write(USER_KEY, fresh);
     return fresh;
   }
 
@@ -118,7 +107,7 @@ export class Identity {
   identify(userId) {
     if (typeof userId === "string" && userId.length > 0) {
       this.userId = userId;
-      persistUserId(userId);
+      this._storage.write(USER_KEY, userId);
     }
   }
 
@@ -136,10 +125,10 @@ export class Identity {
    *     identify() again.
    */
   reset() {
-    persistUserId(null);
+    this._storage.remove(USER_KEY);
     if (this.autoIdentify) {
       const fresh = uuid();
-      persistUserId(fresh);
+      this._storage.write(USER_KEY, fresh);
       this.userId = fresh;
     } else {
       this.userId = null;
