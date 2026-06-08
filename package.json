@@ -13,8 +13,8 @@
     "build": "bun run --filter '*' build",
     "types": "bun run --filter '*' types",
     "test": "bun test",
-    "lint": "eslint packages/**/src/**/*.js",
-    "format": "prettier --write \"packages/**/src/**/*.js\"",
+    "lint": "eslint \"packages/**/src/**/*.js\" \"packages/**/test/**/*.js\"",
+    "format": "prettier --write \"packages/**/src/**/*.js\" \"packages/**/test/**/*.js\"",
     "size": "bun run --filter '*' size"
   },
   "devDependencies": {
