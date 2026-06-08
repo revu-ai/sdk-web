@@ -7,7 +7,7 @@
 import { Capture } from "./capture.js";
 import { Identity } from "./identity.js";
 import { Transport } from "./transport.js";
-import { nowIso, uuid } from "./utils.js";
+import { nowIso, routePath, uuid } from "./utils.js";
 
 export class RevuClient {
   /** @param {import("./types.js").ResolvedConfig} config */
@@ -52,7 +52,7 @@ export class RevuClient {
       sequence_no: this.sequence++,
       platform: "web",
       event_type: eventType,
-      screen: typeof location !== "undefined" ? location.pathname : "",
+      screen: routePath(),
       fingerprint: data.fingerprint,
       properties: data.properties || {},
       device_time: nowIso(),

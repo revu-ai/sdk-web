@@ -53,3 +53,16 @@ export function truncate(value, max = 255) {
   const s = String(value);
   return s.length > max ? s.slice(0, max) : s;
 }
+
+/**
+ * The current "route" path used as the screen/page identifier. Combines
+ * pathname with the hash so a hash-router app (e.g. `/#/pricing`) treats each
+ * hash as a distinct route, and plain anchor navigation (e.g. `#section-2`)
+ * is also visible as a separate screen. SSR-safe: returns "" when there is
+ * no `location`.
+ * @returns {string}
+ */
+export function routePath() {
+  if (typeof location === "undefined") return "";
+  return location.pathname + location.hash;
+}

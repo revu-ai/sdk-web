@@ -6,6 +6,7 @@
  */
 
 import { fingerprint } from "./fingerprint.js";
+import { routePath } from "./utils.js";
 
 /**
  * @callback EmitFn
@@ -37,11 +38,11 @@ export class Capture {
   /** Emit a `$pageview` for the current location. */
   capturePageview() {
     if (typeof location === "undefined") return;
-    this.lastPath = location.pathname;
+    this.lastPath = routePath();
     this.emit("$pageview", {
       properties: {
         url: location.href,
-        path: location.pathname,
+        path: this.lastPath,
         referrer: typeof document !== "undefined" ? document.referrer || undefined : undefined,
         title: typeof document !== "undefined" ? document.title || undefined : undefined,
       },
@@ -57,18 +58,21 @@ export class Capture {
     if (!el || el.nodeType !== 1) return;
     this.emit("$autocapture", {
       fingerprint: fingerprint(el),
-      properties: { path: location.pathname },
+      properties: { path: routePath() },
     });
   }
 
   /**
-   * Detect SPA route changes by wrapping the History API + `popstate`,
-   * emitting a page view whenever the path changes.
+   * Detect SPA route changes by wrapping the History API and listening for
+   * `popstate` and `hashchange`. Emits a page view whenever the route changes,
+   * where the route is the pathname plus the hash so hash-router apps
+   * (`/#/pricing` -> `/#/about`) and anchor navigation (`#section-1` ->
+   * `#section-2`) are both observed.
    */
   installSpaNavigation() {
     if (typeof history === "undefined" || typeof addEventListener !== "function") return;
     const fire = () => {
-      if (location.pathname !== this.lastPath) this.capturePageview();
+      if (routePath() !== this.lastPath) this.capturePageview();
     };
     for (const method of /** @type {const} */ (["pushState", "replaceState"])) {
       const original = history[method];
@@ -82,5 +86,6 @@ export class Capture {
       };
     }
     addEventListener("popstate", fire);
+    addEventListener("hashchange", fire);
   }
 }

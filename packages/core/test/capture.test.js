@@ -113,17 +113,36 @@ describe("Capture", () => {
     expect(pageviews(events)[0].data.properties.path).toBe("/about");
   });
 
-  test("hash-only change does NOT emit a $pageview (pathname-based)", () => {
-    // Documents the current behavior: hash-router SPAs would need a separate
-    // `hashchange` listener. Adding that is a follow-up slice.
+  test("hash change emits a $pageview with the hash included in path", () => {
+    // Hash-router SPAs (e.g. `/#/pricing` -> `/#/about`) and plain anchor
+    // navigation (`#section-1` -> `#section-2`) are both observed: the route
+    // signature is pathname + hash, so any change to either segment is a
+    // distinct screen.
     const { cap, events } = makeCapture();
     cap.start();
     events.length = 0;
 
     history.pushState(null, "", "/#section-2");
 
-    expect(pageviews(events)).toHaveLength(0);
+    const pv = pageviews(events);
+    expect(pv).toHaveLength(1);
+    expect(pv[0].data.properties.path).toBe("/#section-2");
   });
+
+  test("hash-router transitions emit one $pageview per route", () => {
+    const { cap, events } = makeCapture();
+    cap.start();
+    events.length = 0;
+
+    history.pushState(null, "", "/#/pricing");
+    history.pushState(null, "", "/#/about");
+    history.pushState(null, "", "/#/about"); // duplicate, no extra emit
+
+    const pv = pageviews(events);
+    expect(pv).toHaveLength(2);
+    expect(pv.map((e) => e.data.properties.path)).toEqual(["/#/pricing", "/#/about"]);
+  });
+
 });
 
 describe("Capture - input masking", () => {
