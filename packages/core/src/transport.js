@@ -4,8 +4,8 @@
  * so they survive reloads, navigation, and offline periods. Batches flush on
  * size, on an interval, when connectivity returns (`online`), and on page-hide
  * (`sendBeacon`, so in-flight events survive navigation/close). Failed sends
- * stay queued and retry with exponential backoff, so 429/503/offline degrade
- * gracefully with no data loss (corpus Ingest-Security 4, SDK-Engineering 2.5).
+ * stay queued and retry with exponential backoff, so 429 / 503 / offline
+ * conditions degrade gracefully with no data loss.
  */
 
 import { PersistentQueue } from "./queue.js";

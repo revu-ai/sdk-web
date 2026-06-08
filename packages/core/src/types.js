@@ -25,8 +25,10 @@
  */
 
 /**
- * The element fingerprint for an auto-captured interaction.
- * Semantic-weighted, fuzzy-matchable - see corpus Canonical-Behavior-Schemas §2.
+ * The element fingerprint for an auto-captured interaction. A semantic,
+ * weighted summary of the element (tag, role, visible text, classes, a short
+ * selector path, sibling ordinal) so the server can later name the action and
+ * match it across DOM rewrites without an exact selector.
  * @typedef {object} Fingerprint
  * @property {string} tag                  Element tag (e.g. "button").
  * @property {string} [text]               Visible text (truncated; masked if sensitive).

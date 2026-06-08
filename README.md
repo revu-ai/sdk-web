@@ -15,7 +15,7 @@ revu.track("Plan Upgraded", { tier: "pro" });   // optional explicit event
 
 - **Vanilla JavaScript + JSDoc** - the source is plain, runnable ESM. **JSDoc is the single source of truth for both docs and types** (DRY); `tsc` generates `.d.ts` declarations at build time, so consumers still get full TypeScript intellisense without the source being TS.
 - **Lean core + opt-in modules (monorepo)** - `@revu-ai/core` is the only required package; `surveys`, `replay`, etc. are added later as separate packages that share the core. Unused modules ship **zero** bytes.
-- **Never block, never crash the host** - all work is defensive and off the critical path (see `AGENTS.md`).
+- **Never block, never crash the host** - every public entry point is wrapped so an internal failure is swallowed (and, in debug, logged) instead of bubbling into the host page. All work is kept off the critical path.
 
 ## Structure
 

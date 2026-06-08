@@ -5,10 +5,11 @@
  * exceeded) it transparently falls back to an in-memory array, so the SDK
  * still works, it just loses durability across reloads.
  *
- * Invariants (corpus SDK-Engineering-Lessons.md):
- * - Never throws into the host (every storage call is guarded). 2.3
- * - Bounded: capped size with oldest-first pruning so it cannot fill a user's
- *   localStorage or grow without limit. 2.5
+ * Invariants:
+ * - Never throws into the host page. Every storage call is guarded so a
+ *   broken or full localStorage cannot bubble an exception into app code.
+ * - Bounded. A hard cap with oldest-first pruning keeps the queue from
+ *   filling a user's localStorage or growing without limit.
  */
 
 /**

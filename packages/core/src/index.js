@@ -7,8 +7,8 @@
  * revu.init({ apiKey: "phc_xxx" });
  * ```
  *
- * Every public method is wrapped so the SDK can **never throw into the host
- * page** (cardinal invariant - corpus SDK-Engineering-Lessons §2.3).
+ * Every public method is wrapped with `safe()` so the SDK can **never throw
+ * into the host page** - the cardinal invariant of a defensive analytics SDK.
  */
 
 import { RevuClient } from "./client.js";

@@ -1,7 +1,8 @@
 /**
  * @file Identity - first-party anonymous id + session, and identify()/alias.
- * Anonymous id is a generated UUID persisted in localStorage (NOT a device
- * fingerprint). See corpus Privacy-Consent-Identity-Design §1.
+ * Anonymous id is a generated UUID persisted in localStorage; it is NOT a
+ * device fingerprint and carries no cross-site signal. It only links events
+ * captured in this browser to the same logical visitor across reloads.
  */
 
 import { uuid } from "./utils.js";

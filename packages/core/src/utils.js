@@ -23,9 +23,9 @@ export function nowIso() {
 }
 
 /**
- * Wrap a function so it can NEVER throw into the host page - the cardinal SDK
- * invariant (see corpus SDK-Engineering-Lessons §2.3). Errors are swallowed
- * and, in debug, logged.
+ * Wrap a function so it can NEVER throw into the host page. This is the
+ * cardinal SDK invariant: an analytics SDK that breaks the host site is
+ * worse than no SDK at all. Errors are swallowed and, in debug, logged.
  * @template {(...args: any[]) => any} F
  * @param {F} fn
  * @param {(err: unknown) => void} [onError]
