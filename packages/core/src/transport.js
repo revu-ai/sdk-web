@@ -94,7 +94,11 @@ export class Transport {
     if (batch.length === 0) return true;
     const body = JSON.stringify({ api_key: this.options.apiKey, batch });
 
-    if (isUnload && typeof navigator !== "undefined" && navigator.sendBeacon) {
+    if (
+      isUnload &&
+      typeof navigator !== "undefined" &&
+      typeof navigator.sendBeacon === "function"
+    ) {
       // Fire-and-forget on unload; if the browser accepts it, drop the batch.
       const queued = safeBeacon(navigator, this.endpoint, body);
       if (queued) this.queue.commit(batch.length);

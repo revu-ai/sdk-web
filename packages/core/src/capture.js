@@ -73,7 +73,10 @@ export class Capture {
     for (const method of /** @type {const} */ (["pushState", "replaceState"])) {
       const original = history[method];
       history[method] = function patched(/** @type {any[]} */ ...args) {
-        const result = original.apply(this, args);
+        // Forward the original arguments verbatim. The runtime tuple is
+        // structurally what `pushState`/`replaceState` expect; we cast so TS
+        // accepts the rest-spread into their fixed-length signature.
+        const result = original.apply(this, /** @type {Parameters<typeof original>} */ (args));
         fire();
         return result;
       };
