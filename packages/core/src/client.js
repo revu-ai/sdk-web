@@ -92,6 +92,32 @@ export class RevuClient {
     });
   }
 
+  /**
+   * Sign-out counterpart to {@link identify}: emit a synthetic `$reset`
+   * event marking the close of the identified session, then clear the
+   * user id and regenerate the session id. The anonymous id is
+   * preserved - the same browser/device remains tracked as an
+   * anonymous visitor.
+   *
+   * Order matters: the `$reset` event is emitted BEFORE the identity
+   * reset so the event carries the OLD `session_id` and `user_id` and
+   * sorts as the final marker of the logged-in session in the dashboard
+   * timeline. Subsequent events use the fresh session id with
+   * `user_id: null`.
+   *
+   * Idempotent: calling `reset()` when there is no identified user is
+   * a no-op (no event, no identity change). That keeps a redundant
+   * sign-out path in the host app from accidentally breaking sessions.
+   */
+  reset() {
+    const previousUserId = this.identity.userId;
+    if (previousUserId === null) return;
+    this.record("$reset", {
+      properties: { previous_user_id: previousUserId },
+    });
+    this.identity.reset();
+  }
+
   /** Send any buffered events now. @returns {Promise<boolean>} */
   flush() {
     return this.transport.flush();

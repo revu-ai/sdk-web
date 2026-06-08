@@ -54,6 +54,14 @@ const revu = {
    */
   identify: safe((userId) => client?.identify(userId), onError),
 
+  /**
+   * Sign-out counterpart to {@link revu.identify}: clear the identified
+   * user, regenerate the session id, and emit a `$reset` event marking
+   * the end of the logged-in session. The anonymous id is preserved.
+   * No-op when no user is currently identified.
+   */
+  reset: safe(() => client?.reset(), onError),
+
   /** Flush buffered events immediately. @returns {Promise<boolean>|undefined} */
   flush: safe(() => client?.flush(), onError),
 };
