@@ -298,3 +298,87 @@ describe("Identity > session continuation", () => {
     });
   });
 });
+
+describe("Identity > new vs returning visitor", () => {
+  const ANON_FIRST_SEEN_KEY = "revu_anonymous_first_seen_at";
+  const ANON_FIRST_SESSION_KEY = "revu_anonymous_first_session_id";
+  const LS_ONLY = { persistentStorage: /** @type {const} */ ("localStorage") };
+
+  /**
+   * @param {(advance: (ms: number) => void) => void} fn
+   */
+  function withMockClock(fn) {
+    const realNow = Date.now;
+    let now = 1_700_000_000_000;
+    Date.now = () => now;
+    try {
+      fn((ms) => { now += ms; });
+    } finally {
+      Date.now = realNow;
+    }
+  }
+
+  test("the first construction marks the visitor as new and persists first_seen_at", () => {
+    withMockClock(() => {
+      const id = new Identity(LS_ONLY);
+      expect(id.isNewVisitor).toBe(true);
+      expect(id.firstSeenAt).toBe(new Date(1_700_000_000_000).toISOString());
+      // first_seen_at and the first session id are written so they survive
+      // a reload.
+      expect(localStorage.getItem(ANON_FIRST_SEEN_KEY)).toBe(String(1_700_000_000_000));
+      expect(localStorage.getItem(ANON_FIRST_SESSION_KEY)).toBe(id.sessionId);
+    });
+  });
+
+  test("inside the continuation window the visitor stays new across reloads", () => {
+    withMockClock((advance) => {
+      const first = new Identity({ ...LS_ONLY, sessionTimeoutMs: 60_000 });
+      expect(first.isNewVisitor).toBe(true);
+      // Reload still inside the 60s continuation window: same session id,
+      // so still classified as new (we are still in the same first visit).
+      advance(30_000);
+      const reload = new Identity({ ...LS_ONLY, sessionTimeoutMs: 60_000 });
+      expect(reload.sessionId).toBe(first.sessionId);
+      expect(reload.isNewVisitor).toBe(true);
+    });
+  });
+
+  test("a second session after the continuation window flips the visitor to returning", () => {
+    withMockClock((advance) => {
+      const first = new Identity({ ...LS_ONLY, sessionTimeoutMs: 60_000 });
+      const firstSessionId = first.sessionId;
+      expect(first.isNewVisitor).toBe(true);
+      // Advance past the timeout so the next construction rotates the session.
+      advance(120_000);
+      const second = new Identity({ ...LS_ONLY, sessionTimeoutMs: 60_000 });
+      expect(second.sessionId).not.toBe(firstSessionId);
+      expect(second.isNewVisitor).toBe(false);
+      // first_seen_at remains pinned to the first ever visit.
+      expect(second.firstSeenAt).toBe(first.firstSeenAt);
+    });
+  });
+
+  test("reset() does not retroactively mark the device as new", () => {
+    // reset() is logout: same device, different person. The next session
+    // is the device's second session, so isNewVisitor is false.
+    withMockClock(() => {
+      const id = new Identity({ ...LS_ONLY, sessionTimeoutMs: 60_000 });
+      expect(id.isNewVisitor).toBe(true);
+      id.reset();
+      // Reconstruct to read the resolved flag (`reset()` itself does not
+      // mutate isNewVisitor; the flag is set at construction time).
+      const after = new Identity({ ...LS_ONLY, sessionTimeoutMs: 60_000 });
+      expect(after.sessionId).toBe(id.sessionId);
+      expect(after.isNewVisitor).toBe(false);
+    });
+  });
+
+  test("a corrupt persisted first_seen_at falls back to now and self-heals", () => {
+    withMockClock(() => {
+      localStorage.setItem(ANON_FIRST_SEEN_KEY, "not-a-number");
+      const id = new Identity(LS_ONLY);
+      expect(id.firstSeenAt).toBe(new Date(1_700_000_000_000).toISOString());
+      expect(localStorage.getItem(ANON_FIRST_SEEN_KEY)).toBe(String(1_700_000_000_000));
+    });
+  });
+});

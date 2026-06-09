@@ -127,8 +127,15 @@ export class RevuClient {
       fingerprint: data.fingerprint,
       // Environment context first so caller-supplied properties (track(),
       // capture-layer extras) win on collision: the host always has the
-      // final word over what the SDK auto-populates.
-      properties: { ...this.context.build(), ...(data.properties || {}) },
+      // final word over what the SDK auto-populates. Identity-derived
+      // attribution (`$is_new_visitor`, `$first_seen_at`) sits between
+      // them so it is overridable but defaults are always present.
+      properties: {
+        ...this.context.build(),
+        $is_new_visitor: this.identity.isNewVisitor,
+        $first_seen_at: this.identity.firstSeenAt,
+        ...(data.properties || {}),
+      },
       device_time: nowIso(),
     };
     this.transport.enqueue(event);
