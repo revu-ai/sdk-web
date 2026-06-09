@@ -36,21 +36,11 @@ const ANON_KEY = "revu_anonymous_id";
 const USER_KEY = "revu_user_id";
 const SESSION_KEY = "revu_session_id";
 const SESSION_SEEN_KEY = "revu_session_last_seen";
-/**
- * Timestamp (ms) when the anonymous id was first persisted on this device.
- * Stable across reloads and across sessions; only resets when the anonymous
- * id itself is regenerated (storage cleared on both stores).
- */
-const ANON_FIRST_SEEN_KEY = "revu_anonymous_first_seen_at";
-/**
- * The session_id of the very first session this anonymous id ever started.
- * Lets us compute `is_new_visitor` deterministically without maintaining a
- * lifetime session counter: a visitor is "new" precisely when the current
- * session_id equals their first one, which is true throughout the first
- * session (including reloads inside the continuation window) and false
- * for every subsequent session.
- */
-const ANON_FIRST_SESSION_KEY = "revu_anonymous_first_session_id";
+// `is_new_visitor` and `first_seen_at` are deliberately NOT stored or
+// stamped client-side. They are computed server-side from the
+// `behavior.visitors` rollup table where the API can keep them
+// consistent across SDK upgrades, partial storage corruption, and
+// definition changes (see invariant #6: "The SDK only captures").
 
 const DEFAULT_SESSION_TIMEOUT_MS = 30 * 60 * 1000;
 /**
@@ -107,20 +97,6 @@ export class Identity {
     this._sessionLastTouchPersisted = 0;
     /** @type {string} */
     this.sessionId = this._resolveSession();
-    /**
-     * ISO timestamp of when this device was first seen by the SDK. Same
-     * value across every session for the same anonymous id. Initialized
-     * lazily on the first read so existing installs upgrade cleanly.
-     * @type {string}
-     */
-    this.firstSeenAt = this._resolveFirstSeenAt();
-    /**
-     * True while the current session is the very first session this
-     * anonymous id has ever started; false on every subsequent session.
-     * Drives the `new vs returning` segment in the dashboard.
-     * @type {boolean}
-     */
-    this.isNewVisitor = this._resolveIsNewVisitor();
   }
 
   /**
@@ -186,43 +162,6 @@ export class Identity {
     this._storage.write(SESSION_SEEN_KEY, String(now));
     this._sessionLastTouchPersisted = now;
     return fresh;
-  }
-
-  /**
-   * Return the ISO timestamp of when this device was first seen, lazily
-   * initializing the persisted value on first call. Stable across reloads
-   * and sessions; only resets when the storage layer loses the anonymous
-   * id (in which case a brand new anonymous id is also generated and the
-   * device legitimately is "new" again from the SDK's perspective).
-   * @returns {string}
-   */
-  _resolveFirstSeenAt() {
-    const persisted = this._storage.read(ANON_FIRST_SEEN_KEY);
-    if (persisted) {
-      const ms = Number.parseInt(persisted, 10);
-      if (Number.isFinite(ms)) return new Date(ms).toISOString();
-    }
-    const now = Date.now();
-    this._storage.write(ANON_FIRST_SEEN_KEY, String(now));
-    return new Date(now).toISOString();
-  }
-
-  /**
-   * Resolve whether the current session is the first session this device
-   * has ever started. Stores the first session_id on first call; reads it
-   * and compares to the current session_id on every subsequent call. The
-   * comparison stays true through reloads inside the continuation window
-   * (the session_id is the same) and flips to false the moment a fresh
-   * session_id is generated after a timeout.
-   * @returns {boolean}
-   */
-  _resolveIsNewVisitor() {
-    const persisted = this._storage.read(ANON_FIRST_SESSION_KEY);
-    if (persisted) {
-      return persisted === this.sessionId;
-    }
-    this._storage.write(ANON_FIRST_SESSION_KEY, this.sessionId);
-    return true;
   }
 
   /**

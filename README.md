@@ -97,10 +97,8 @@ Every event also carries engine-emitted properties (prefixed `$`) so the dashboa
 | `$connection_type`, `$connection_downlink_mbps`, `$connection_rtt_ms`, `$save_data` | Network Information API (Chromium only today) | event |
 | `$initial_referrer`, `$initial_referrer_host` | `document.referrer` at init | page load |
 | `$utm_source`, `$utm_medium`, `$utm_campaign`, `$utm_term`, `$utm_content`, `$gclid`, `$fbclid` | URL query at init | page load |
-| `$is_new_visitor` | True only inside the very first session this device has ever started | first session |
-| `$first_seen_at` | ISO timestamp of when the SDK first saw this device | device lifetime |
 
-Caller-supplied properties on `revu.track(name, props)` always win over engine values on collision, so the host can override anything when it knows better. UA parsing into os / browser / device happens server-side so the SDK stays tiny.
+Caller-supplied properties on `revu.track(name, props)` always win over engine values on collision, so the host can override anything when it knows better. UA parsing into os / browser / device happens server-side so the SDK stays tiny - and so do derivations like "first seen at" and "new vs returning", which the server computes deterministically from the event stream and so survive SDK upgrades and partial storage corruption.
 
 ## Custom events
 
