@@ -8,6 +8,7 @@ import { Capture } from "./capture.js";
 import { Context } from "./context.js";
 import { Identity } from "./identity.js";
 import { Transport } from "./transport.js";
+import { Vitals } from "./vitals.js";
 import { nowIso, routePath, uuid } from "./utils.js";
 
 export class RevuClient {
@@ -33,14 +34,63 @@ export class RevuClient {
     this.capture = new Capture((type, data) => this.record(type, data), {
       maskAllInputs: config.maskAllInputs,
     });
+    this.vitals = new Vitals((type, data) => this.record(type, data));
     /** @type {number} */
     this.sequence = 0;
+    /** @type {import("./types.js").RevuPlugin[]} Plugins registered so far. */
+    this._plugins = [];
+    /** @type {Set<string>} Names of plugins already installed (dedup). */
+    this._installed = new Set();
+    /** @type {boolean} True after `start()` so late `use()` calls install immediately. */
+    this._started = false;
   }
 
-  /** Start transport + autocapture (if enabled). */
+  /** Start transport + autocapture + vitals + any registered plugins. */
   start() {
     this.transport.start();
     if (this.config.autocapture) this.capture.start();
+    if (this.config.captureWebVitals !== false) this.vitals.start();
+    for (const plugin of this._plugins) {
+      if (!this._installed.has(plugin.name)) this._installPlugin(plugin);
+    }
+    this._started = true;
+  }
+
+  /**
+   * Register a plugin. Plugins added via `revu.init({ plugins: [...] })` flow
+   * through here too. Calling `use()` after `start()` installs the plugin
+   * immediately; before `start()` it is queued and installed when start runs.
+   * The same plugin name registered twice is a no-op so a host that wires
+   * a plugin in two code paths does not get double listeners.
+   * @param {import("./types.js").RevuPlugin} plugin
+   */
+  use(plugin) {
+    if (
+      !plugin ||
+      typeof plugin.name !== "string" ||
+      plugin.name.length === 0 ||
+      typeof plugin.install !== "function"
+    ) return;
+    if (this._installed.has(plugin.name)) return;
+    this._plugins.push(plugin);
+    if (this._started) this._installPlugin(plugin);
+  }
+
+  /**
+   * Hand the plugin its API surface and mark it installed. The API is the
+   * minimum a plugin needs to emit events through the standard pipeline
+   * (identity + context + transport) while reading the current identity,
+   * environment context, and resolved config.
+   * @param {import("./types.js").RevuPlugin} plugin
+   */
+  _installPlugin(plugin) {
+    this._installed.add(plugin.name);
+    plugin.install({
+      record: (type, data) => this.record(type, data),
+      identity: this.identity,
+      context: this.context,
+      config: this.config,
+    });
   }
 
   /**

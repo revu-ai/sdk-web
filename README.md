@@ -51,10 +51,32 @@ Out of the box, the SDK emits these without any host wiring (every event also ca
 | `$outbound_link` | Click on a link whose hostname differs from `location.hostname` | `url`, `target_host` |
 | `$page_leave` | SPA route change (for the previous page) + `pagehide` (terminal) | `engagement_time_ms`, `path` |
 | `$identify` / `$reset` | `revu.identify()` / `revu.reset()` | `previous_user_id` on transitions |
+| `$web_vital` | `pagehide` / `visibilitychange=hidden` | `name` ("LCP" / "INP" / "CLS"), `value`, `unit` |
 
 `$page_leave`'s `engagement_time_ms` excludes time when the tab was hidden (paused on `visibilitychange=hidden`, resumed on `visible`), so a user who opens a tab and walks away for an hour does not get credited with an hour of engagement.
 
 Form events respect `data-revu-mask`: a form (or any ancestor) carrying the attribute still emits `$form_submit` for the action / method / id metadata but omits `field_names`, `field_types`, and `field_count` entirely.
+
+`$web_vital` reports Google's three Core Web Vitals (LCP, INP, CLS) on terminal page lifecycle. Pure PerformanceObserver; no runtime dependencies. Turn off with `revu.init({ captureWebVitals: false })`.
+
+## Plugins
+
+The core covers the universal, privacy-neutral baseline. Anything beyond that lands as a plugin so the core stays small and customers only pay for what they use.
+
+```js
+import revu from "@revu-ai/core";
+import { exceptions } from "@revu-ai/core/exceptions"; // future
+import { replay } from "@revu-ai/replay";              // future, separate package
+
+revu.init({
+  apiKey: "...",
+  plugins: [exceptions(), replay({ sampleRate: 0.1 })],
+});
+```
+
+A plugin is `{ name: string, install(api): void }`. Inside `install`, the plugin gets `record(type, props)` to emit events through the standard pipeline (identity + environment context + transport), plus read-only access to `identity`, `context`, and `config`.
+
+Plugins live in different distribution units depending on size and lifecycle - the rubric is in [BACKLOG.md](./BACKLOG.md).
 
 ## Environment context on every event
 

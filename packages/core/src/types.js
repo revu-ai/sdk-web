@@ -20,6 +20,40 @@
  * @property {number} [maxQueue=1000]      Hard cap on durably-queued events; oldest are pruned first.
  * @property {boolean} [debug=false]       Log captured events to the console.
  * @property {(event: RevuEvent) => void} [onEvent] Optional hook called for every captured event (debug overlays, tests).
+ * @property {boolean} [captureWebVitals=true] Emit `$web_vital` events for LCP, INP, and CLS on page hide. Pure-observer, zero PII.
+ * @property {RevuPlugin[]} [plugins]      Plugins to install during `init()`. Equivalent to calling `revu.use(plugin)` for each, but co-located with the rest of the config.
+ */
+
+/**
+ * A REVU plugin. Plugins extend the SDK with new event types or behaviors
+ * without bloating the core. They receive a small API surface at install
+ * time and can call `record()` to emit events through the same pipeline
+ * (identity, environment context, transport) as built-in autocapture.
+ *
+ * Distribution is orthogonal to the plugin contract:
+ *   - Subpath plugins live inside `@revu-ai/core` (e.g. `@revu-ai/core/exceptions`)
+ *     and tree-shake out when not registered.
+ *   - Separate packages (e.g. a future `@revu-ai/replay`) implement the same
+ *     contract but ship their own npm publication. Use a separate package when
+ *     the feature exceeds ~5 kB gzipped, has its own ingest endpoint, has a
+ *     materially different privacy posture, or needs independent versioning.
+ *
+ * @typedef {object} RevuPlugin
+ * @property {string} name                  Unique plugin id. Installing the same `name` twice is a no-op.
+ * @property {(api: PluginApi) => void} install  Called once at SDK start (or immediately on `use()` if start has already happened).
+ * @property {() => void} [uninstall]       Optional teardown hook for plugins that wire listeners or timers.
+ */
+
+/**
+ * The API surface a plugin sees at install time. Deliberately minimal: a
+ * plugin emits events through `record`, reads identity / context / config,
+ * and does its own DOM / network / browser-API work as needed.
+ *
+ * @typedef {object} PluginApi
+ * @property {(eventType: string, data?: { fingerprint?: Fingerprint, properties?: Record<string, unknown> }) => void} record  Emit an event through the standard pipeline.
+ * @property {import("./identity.js").Identity} identity  Read-only access to the current ids.
+ * @property {import("./context.js").Context} context     Read-only access to the environment context builder.
+ * @property {ResolvedConfig} config        Read-only access to the resolved config.
  */
 
 /**

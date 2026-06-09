@@ -21,6 +21,15 @@ export * from "./types.js";
 /** @type {RevuClient|null} */
 let client = null;
 
+/**
+ * Plugins registered via `revu.use()` before `revu.init()` are queued here
+ * and installed during init. Without this, a host that imports a plugin
+ * module at the top of their bundle would silently lose it if init runs
+ * later in the boot sequence.
+ * @type {import("./types.js").RevuPlugin[]}
+ */
+const pendingPlugins = [];
+
 /** @param {unknown} err */
 function onError(err) {
   if (client?.config.debug) console.error("[REVU]", err);
@@ -32,13 +41,34 @@ function onError(err) {
 const revu = {
   /**
    * Initialize the SDK. Safe to call once; subsequent calls are ignored.
+   * Plugins can be passed via the config or registered separately via
+   * `revu.use()`.
    * @param {import("./types.js").RevuConfig} config
    * @returns {void}
    */
   init: safe((config) => {
     if (client) return;
     client = new RevuClient(resolveConfig(config));
+    if (Array.isArray(config?.plugins)) {
+      for (const p of config.plugins) client.use(p);
+    }
+    while (pendingPlugins.length) {
+      client.use(/** @type {import("./types.js").RevuPlugin} */ (pendingPlugins.shift()));
+    }
     client.start();
+  }, onError),
+
+  /**
+   * Register a plugin. Equivalent to passing it in `init({ plugins: [...] })`,
+   * but available as a separate call so plugins can be wired conditionally
+   * (e.g. behind a feature flag) after `init()`. Pre-init `use()` calls are
+   * queued and drained when init runs.
+   * @param {import("./types.js").RevuPlugin} plugin
+   * @returns {void}
+   */
+  use: safe((plugin) => {
+    if (client) client.use(plugin);
+    else pendingPlugins.push(plugin);
   }, onError),
 
   /**

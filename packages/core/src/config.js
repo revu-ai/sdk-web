@@ -16,6 +16,8 @@ const DEFAULTS = {
   maxQueue: 1000,
   debug: false,
   onEvent: () => {},
+  captureWebVitals: true,
+  plugins: [],
 };
 
 /**

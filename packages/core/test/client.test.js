@@ -205,3 +205,100 @@ describe("RevuClient > environment context", () => {
     expect(e?.properties.$user_agent).toBeDefined();
   });
 });
+
+describe("RevuClient > plugins", () => {
+  /**
+   * Build a plugin that records every install call and exposes a custom
+   * emit hook so the test can fire events through the API surface the
+   * plugin actually sees.
+   */
+  function makePlugin(name = "test") {
+    /** @type {Array<import("../src/types.js").PluginApi>} */
+    const installs = [];
+    return {
+      installs,
+      plugin: {
+        name,
+        /** @param {import("../src/types.js").PluginApi} api */
+        install(api) { installs.push(api); },
+      },
+    };
+  }
+
+  test("a plugin registered before start() is installed exactly once on start", () => {
+    const { client } = makeClient();
+    const { plugin, installs } = makePlugin("counts-installs");
+    client.use(plugin);
+    expect(installs).toHaveLength(0); // queued only
+    client.start();
+    expect(installs).toHaveLength(1);
+  });
+
+  test("a plugin registered after start() is installed immediately", () => {
+    const { client } = makeClient();
+    client.start();
+    const { plugin, installs } = makePlugin("late-add");
+    client.use(plugin);
+    expect(installs).toHaveLength(1);
+  });
+
+  test("the same plugin name registered twice is a no-op (dedup)", () => {
+    const { client } = makeClient();
+    const { plugin, installs } = makePlugin("dupe");
+    client.start();
+    client.use(plugin);
+    client.use(plugin);
+    client.use({ ...plugin }); // different object, same name
+    expect(installs).toHaveLength(1);
+  });
+
+  test("malformed plugins are ignored (missing name or install)", () => {
+    const { client } = makeClient();
+    client.start();
+    // None of these should throw; all should be no-ops.
+    client.use(/** @type {any} */ (null));
+    client.use(/** @type {any} */ ({}));
+    client.use(/** @type {any} */ ({ name: "no-install" }));
+    client.use(/** @type {any} */ ({ install: () => {} }));
+    client.use(/** @type {any} */ ({ name: "", install: () => {} }));
+    // Reach in: the installed-set should be empty because none qualified.
+    expect(client._installed.size).toBe(0);
+  });
+
+  test("plugins emit events through the standard pipeline (identity + context)", () => {
+    const { client, events } = makeClient();
+    client.start();
+    client.use({
+      name: "emit-test",
+      install({ record }) {
+        record("plugin_emitted", { properties: { foo: "bar" } });
+      },
+    });
+
+    const e = events.find((ev) => ev.event_type === "plugin_emitted");
+    expect(e).toBeDefined();
+    // Identity envelope is intact.
+    expect(typeof e?.anonymous_id).toBe("string");
+    expect(typeof e?.session_id).toBe("string");
+    expect(e?.platform).toBe("web");
+    // Environment context is merged in.
+    expect(e?.properties.$user_agent).toBeDefined();
+    // Plugin-supplied property survives the merge.
+    expect(e?.properties.foo).toBe("bar");
+  });
+
+  test("plugins see the same identity object the client uses", () => {
+    const { client } = makeClient();
+    /** @type {import("../src/types.js").PluginApi|null} */
+    let api = null;
+    client.use({
+      name: "identity-test",
+      install(theApi) { api = theApi; },
+    });
+    client.start();
+    expect(api).not.toBeNull();
+    expect(api?.identity).toBe(client.identity);
+    expect(api?.context).toBe(client.context);
+    expect(api?.config).toBe(client.config);
+  });
+});
