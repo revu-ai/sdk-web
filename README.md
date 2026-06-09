@@ -34,6 +34,28 @@ revu.init({
 });
 ```
 
+## Autocaptured event types
+
+Out of the box, the SDK emits these without any host wiring (every event also carries the engine context below):
+
+| Event | When | Key properties |
+|---|---|---|
+| `$pageview` | Initial load + SPA route changes (pushState / replaceState / popstate / hashchange) | `url`, `path`, `referrer`, `title` |
+| `$autocapture` | Any click anywhere in the document | `fingerprint` (tag, role, id, classes, selector, text - text redacted when sensitive), `path` |
+| `$rightclick` | Context-menu (right-click) | `fingerprint`, `path` |
+| `$rageclick` | 3 clicks on the same element within 1 s | `fingerprint`, `click_count`, `window_ms` |
+| `$scroll` | Crossing 25 / 50 / 75 / 100% scroll depth (once per milestone per page) | `depth_percent`, `path` |
+| `$resize` | After a resize gesture settles (500 ms debounce) | `from_width`, `from_height`, `to_width`, `to_height` |
+| `$form_submit` | Form submission | `form_id`, `form_name`, `action`, `method`, `field_names[]`, `field_types[]`, `field_count` - **never values** |
+| `$file_download` | Click on a link with `download` attribute or known file extension (pdf, csv, zip, ...) | `url`, `filename`, `extension` |
+| `$outbound_link` | Click on a link whose hostname differs from `location.hostname` | `url`, `target_host` |
+| `$page_leave` | SPA route change (for the previous page) + `pagehide` (terminal) | `engagement_time_ms`, `path` |
+| `$identify` / `$reset` | `revu.identify()` / `revu.reset()` | `previous_user_id` on transitions |
+
+`$page_leave`'s `engagement_time_ms` excludes time when the tab was hidden (paused on `visibilitychange=hidden`, resumed on `visible`), so a user who opens a tab and walks away for an hour does not get credited with an hour of engagement.
+
+Form events respect `data-revu-mask`: a form (or any ancestor) carrying the attribute still emits `$form_submit` for the action / method / id metadata but omits `field_names`, `field_types`, and `field_count` entirely.
+
 ## Environment context on every event
 
 Every event also carries engine-emitted properties (prefixed `$`) so the dashboard can break out by browser, viewport, locale, and campaign without any host-side wiring:
