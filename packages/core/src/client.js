@@ -32,19 +32,20 @@ export class RevuClient {
       debug: config.debug,
       onEvent: config.onEvent,
     });
-    this.attention = new Attention(
-      (type, data) => this.record(type, data),
-      {
-        idleTimeoutMs: config.idleTimeoutMs,
-        captureAttention: config.captureAttention,
-      },
-    );
+    // One emit closure shared by every collaborator; the only thing each
+    // sink does is feed the standard pipeline (identity + context + transport).
+    const emit = (/** @type {string} */ type, /** @type {any} */ data) =>
+      this.record(type, data);
+    this.attention = new Attention(emit, {
+      idleTimeoutMs: config.idleTimeoutMs,
+      captureAttention: config.captureAttention,
+    });
     this.capture = new Capture(
-      (type, data) => this.record(type, data),
+      emit,
       { maskAllInputs: config.maskAllInputs },
       this.attention,
     );
-    this.vitals = new Vitals((type, data) => this.record(type, data));
+    this.vitals = new Vitals(emit);
     /** @type {number} */
     this.sequence = 0;
     /** @type {import("./types.js").RevuPlugin[]} Plugins registered so far. */
