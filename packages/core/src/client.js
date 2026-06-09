@@ -4,6 +4,7 @@
  * interaction, and exposes the public surface (capture / identify / flush).
  */
 
+import { Attention } from "./attention.js";
 import { Capture } from "./capture.js";
 import { Context } from "./context.js";
 import { Identity } from "./identity.js";
@@ -31,9 +32,18 @@ export class RevuClient {
       debug: config.debug,
       onEvent: config.onEvent,
     });
-    this.capture = new Capture((type, data) => this.record(type, data), {
-      maskAllInputs: config.maskAllInputs,
-    });
+    this.attention = new Attention(
+      (type, data) => this.record(type, data),
+      {
+        idleTimeoutMs: config.idleTimeoutMs,
+        captureAttention: config.captureAttention,
+      },
+    );
+    this.capture = new Capture(
+      (type, data) => this.record(type, data),
+      { maskAllInputs: config.maskAllInputs },
+      this.attention,
+    );
     this.vitals = new Vitals((type, data) => this.record(type, data));
     /** @type {number} */
     this.sequence = 0;
@@ -45,9 +55,12 @@ export class RevuClient {
     this._started = false;
   }
 
-  /** Start transport + autocapture + vitals + any registered plugins. */
+  /** Start transport + attention + autocapture + vitals + any registered plugins. */
   start() {
     this.transport.start();
+    // Attention starts before capture so the engagement clock is already
+    // ticking when the initial $pageview fires.
+    this.attention.start();
     if (this.config.autocapture) this.capture.start();
     if (this.config.captureWebVitals !== false) this.vitals.start();
     for (const plugin of this._plugins) {

@@ -47,24 +47,28 @@ export class Capture {
   /**
    * @param {EmitFn} emit
    * @param {{ maskAllInputs: boolean }} options
+   * @param {import("./attention.js").Attention} attention  Engagement clock
+   *   plus tab visibility / idle tracking. Owns engagement_time_ms; capture
+   *   delegates rather than running a second clock.
    */
-  constructor(emit, options) {
+  constructor(emit, options, attention) {
     this.emit = emit;
     this.options = options;
+    this.attention = attention;
     /** @type {string|undefined} */
     this.lastPath = undefined;
     /** @type {Set<number>} Scroll milestones already fired on the current page. */
     this._scrollFired = new Set();
     /** @type {Array<{ key: string, t: number }>} Sliding window of recent clicks. */
     this._recentClicks = [];
-    /** @type {{ visibleStart: number|null, accumulated: number }} */
-    this._engagement = { visibleStart: null, accumulated: 0 };
     /** @type {{ w: number, h: number }|null} */
     this._lastViewport = null;
     /** @type {ReturnType<typeof setTimeout>|null} */
     this._resizeTimer = null;
     /** @type {boolean} Scroll handler throttle gate. */
     this._scrollThrottled = false;
+    /** @type {boolean|undefined} pagehide.persisted, ferried into the next $page_leave. */
+    this._pendingPersisted = undefined;
   }
 
   /** Wire up listeners and emit the initial page view. */
@@ -79,23 +83,17 @@ export class Capture {
     document.addEventListener("click", (e) => this.onClick(e), { capture: true });
     document.addEventListener("contextmenu", (e) => this.onContextMenu(e), { capture: true });
     document.addEventListener("submit", (e) => this.onSubmit(e), { capture: true });
-    document.addEventListener("visibilitychange", () => this.onVisibilityChange());
 
     if (typeof window !== "undefined") {
       window.addEventListener("scroll", () => this.onScroll(), { passive: true });
       window.addEventListener("resize", () => this.onResize());
       // `pagehide` is the cross-browser reliable terminal signal (handles bfcache,
       // tab close, navigation away). `beforeunload` is unreliable on mobile.
-      window.addEventListener("pagehide", () => this.onPageHide());
+      window.addEventListener("pagehide", (e) => this.onPageHide(e));
       this._lastViewport = {
         w: typeof window.innerWidth === "number" ? window.innerWidth : 0,
         h: typeof window.innerHeight === "number" ? window.innerHeight : 0,
       };
-    }
-
-    // Start the engagement clock if the page is visible right now.
-    if (document.visibilityState !== "hidden") {
-      this._engagement.visibleStart = Date.now();
     }
   }
 
@@ -360,65 +358,47 @@ export class Capture {
   }
 
   // -------------------------------------------------------------------------
-  // Engagement time + page leave
+  // Page leave (engagement time comes from the attention layer)
   // -------------------------------------------------------------------------
-
-  /**
-   * Pause/resume the engagement clock based on document.visibilityState so
-   * a user who tabs away for an hour doesn't get credited with an hour of
-   * engagement.
-   */
-  onVisibilityChange() {
-    if (typeof document === "undefined") return;
-    if (document.visibilityState === "visible") {
-      // Resume.
-      if (this._engagement.visibleStart == null) {
-        this._engagement.visibleStart = Date.now();
-      }
-    } else {
-      // Pause: bank what was accumulated up to now.
-      this._flushVisibleSpan();
-    }
-  }
 
   /**
    * Pre-unload signal. Emits the $page_leave for the current page so the
    * dashboard sees engagement time even when the user closes the tab. We
    * deliberately do this on `pagehide`, not `beforeunload`: the latter is
    * blocked on iOS Safari and unreliable on mobile generally.
+   *
+   * `pagehide.persisted` is forwarded so the dashboard can distinguish a
+   * terminal close ("user is gone") from a bfcache-eligible navigation
+   * ("user might Back-button to this exact state"). The two have very
+   * different product meanings.
+   *
+   * @param {PageTransitionEvent} [event]
    */
-  onPageHide() {
+  onPageHide(event) {
+    this._pendingPersisted =
+      event && typeof event.persisted === "boolean" ? event.persisted : false;
     this._emitPageLeave(this.lastPath);
   }
 
-  /** Bank the currently-visible span into the accumulator. */
-  _flushVisibleSpan() {
-    if (this._engagement.visibleStart == null) return;
-    this._engagement.accumulated += Date.now() - this._engagement.visibleStart;
-    this._engagement.visibleStart = null;
-  }
-
   /**
-   * Emit a $page_leave for the page identified by `path` and reset the
-   * engagement accumulator. Called on SPA route change and on pagehide.
+   * Emit a $page_leave for the page identified by `path` and bank the
+   * engagement time for the next page. Called on SPA route change and on
+   * pagehide. Engagement_time_ms is the attention layer's accumulated
+   * visible-and-active time, paused for both tab-hidden and idle.
    * @param {string|undefined} path
    */
   _emitPageLeave(path) {
     if (path === undefined) return;
-    this._flushVisibleSpan();
-    this.emit("$page_leave", {
-      properties: {
-        path,
-        engagement_time_ms: this._engagement.accumulated,
-      },
-    });
-    this._engagement.accumulated = 0;
-    if (
-      typeof document !== "undefined" &&
-      document.visibilityState !== "hidden"
-    ) {
-      this._engagement.visibleStart = Date.now();
+    /** @type {Record<string, unknown>} */
+    const properties = {
+      path,
+      engagement_time_ms: this.attention.flushAndReset(),
+    };
+    if (this._pendingPersisted !== undefined) {
+      properties.persisted = this._pendingPersisted;
     }
+    this._pendingPersisted = undefined;
+    this.emit("$page_leave", { properties });
   }
 }
 

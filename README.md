@@ -49,11 +49,15 @@ Out of the box, the SDK emits these without any host wiring (every event also ca
 | `$form_submit` | Form submission | `form_id`, `form_name`, `action`, `method`, `field_names[]`, `field_types[]`, `field_count` - **never values** |
 | `$file_download` | Click on a link with `download` attribute or known file extension (pdf, csv, zip, ...) | `url`, `filename`, `extension` |
 | `$outbound_link` | Click on a link whose hostname differs from `location.hostname` | `url`, `target_host` |
-| `$page_leave` | SPA route change (for the previous page) + `pagehide` (terminal) | `engagement_time_ms`, `path` |
+| `$page_leave` | SPA route change (for the previous page) + `pagehide` (terminal) | `engagement_time_ms`, `path`, `persisted` (only on `pagehide`: bfcache vs terminal close) |
+| `$tab_hidden` | `visibilitychange` to hidden | `visible_ms` (time visible since the last `$tab_visible` or pageview) |
+| `$tab_visible` | `visibilitychange` to visible | `hidden_ms` (time away) |
+| `$idle` | No mouse / keyboard / scroll / touch for `idleTimeoutMs` (default 30 s) | `active_ms` (time active before going idle) |
+| `$active` | First activity after `$idle` | `idle_ms` (time idle before returning) |
 | `$identify` / `$reset` | `revu.identify()` / `revu.reset()` | `previous_user_id` on transitions |
 | `$web_vital` | `pagehide` / `visibilitychange=hidden` | `name` ("LCP" / "INP" / "CLS"), `value`, `unit` |
 
-`$page_leave`'s `engagement_time_ms` excludes time when the tab was hidden (paused on `visibilitychange=hidden`, resumed on `visible`), so a user who opens a tab and walks away for an hour does not get credited with an hour of engagement.
+`$page_leave`'s `engagement_time_ms` is the wall-clock time the tab was visible on the current page. Hidden time is excluded; idle time is included (idle is emitted as a separate behavioral signal but does not subtract from engagement, matching GA4 / PostHog / Mixpanel conventions). Set `idleTimeoutMs: 0` to skip idle detection entirely, or `captureAttention: false` to keep the engagement clock but suppress the `$tab_*` / `$idle` / `$active` events.
 
 Form events respect `data-revu-mask`: a form (or any ancestor) carrying the attribute still emits `$form_submit` for the action / method / id metadata but omits `field_names`, `field_types`, and `field_count` entirely.
 
@@ -117,6 +121,8 @@ sdk-web/
 │       │   ├── queue.js       durable offline queue (localStorage-backed)
 │       │   ├── identity.js    anonymous id + identify()
 │       │   ├── context.js     per-event environment (ua, viewport, utm, connection)
+│       │   ├── attention.js   engagement clock + tab visibility + idle detection
+│       │   ├── vitals.js      LCP / INP / CLS on page hide
 │       │   ├── storage.js     localStorage + cookie persistence
 │       │   ├── config.js      defaults + resolution
 │       │   ├── utils.js       uuid, safe(), truncate (DRY helpers)

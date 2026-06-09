@@ -21,6 +21,8 @@
  * @property {boolean} [debug=false]       Log captured events to the console.
  * @property {(event: RevuEvent) => void} [onEvent] Optional hook called for every captured event (debug overlays, tests).
  * @property {boolean} [captureWebVitals=true] Emit `$web_vital` events for LCP, INP, and CLS on page hide. Pure-observer, zero PII.
+ * @property {boolean} [captureAttention=true] Emit `$tab_hidden`, `$tab_visible`, `$idle`, and `$active` events as the user's attention to the page changes. The engagement clock that powers `$page_leave`'s `engagement_time_ms` always runs regardless of this flag.
+ * @property {number} [idleTimeoutMs=30000] Milliseconds of no mouse / keyboard / scroll / touch activity before the user is considered idle. Setting to 0 disables idle detection entirely (engagement_time_ms then ticks as long as the tab is visible).
  * @property {RevuPlugin[]} [plugins]      Plugins to install during `init()`. Equivalent to calling `revu.use(plugin)` for each, but co-located with the rest of the config.
  */
 

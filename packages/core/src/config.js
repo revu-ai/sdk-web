@@ -17,6 +17,8 @@ const DEFAULTS = {
   debug: false,
   onEvent: () => {},
   captureWebVitals: true,
+  captureAttention: true,
+  idleTimeoutMs: 30000,
   plugins: [],
 };
 

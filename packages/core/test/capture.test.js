@@ -13,6 +13,7 @@
  */
 
 import { beforeAll, beforeEach, describe, expect, test } from "bun:test";
+import { Attention } from "../src/attention.js";
 import { Capture } from "../src/capture.js";
 
 /**
@@ -43,9 +44,15 @@ beforeAll(() => {
 function makeCapture() {
   /** @type {CapturedEvent[]} */
   const events = [];
-  const cap = new Capture((type, data) => events.push({ type, data: data || {} }), {
-    maskAllInputs: true,
-  });
+  // Capture now delegates the engagement clock to the Attention layer.
+  // Wire a real Attention with the lifecycle events muted (captureAttention:
+  // false) so these tests only see the capture-emitted events. idleTimeoutMs
+  // is generous so the idle timer does not fire mid-test.
+  const emit = (/** @type {string} */ type, /** @type {any} */ data) =>
+    events.push({ type, data: data || {} });
+  const attention = new Attention(emit, { captureAttention: false, idleTimeoutMs: 60_000 });
+  attention.start();
+  const cap = new Capture(emit, { maskAllInputs: true }, attention);
   return { cap, events };
 }
 
@@ -611,6 +618,21 @@ describe("Capture - page leave + engagement time", () => {
     expect(leave?.data.properties.path).toBe("/");
     expect(typeof leave?.data.properties.engagement_time_ms).toBe("number");
     expect(/** @type {number} */ (leave?.data.properties.engagement_time_ms)).toBeGreaterThanOrEqual(0);
+  });
+
+  test("$page_leave on pagehide carries the persisted flag from the event", () => {
+    const { cap, events } = makeCapture();
+    cap.start();
+    events.length = 0;
+    // PageTransitionEvent has a `persisted: boolean`. happy-dom does not
+    // construct PageTransitionEvent natively, but a synthetic Event with
+    // the property attached is enough to exercise the read path.
+    const e = new Event("pagehide");
+    Object.defineProperty(e, "persisted", { value: true });
+    window.dispatchEvent(e);
+
+    const leave = events.find((ev) => ev.type === "$page_leave");
+    expect(leave?.data.properties.persisted).toBe(true);
   });
 });
 
