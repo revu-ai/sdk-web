@@ -34,6 +34,24 @@ revu.init({
 });
 ```
 
+## Environment context on every event
+
+Every event also carries engine-emitted properties (prefixed `$`) so the dashboard can break out by browser, viewport, locale, and campaign without any host-side wiring:
+
+| Field | Source | Stable per |
+|---|---|---|
+| `$user_agent` | `navigator.userAgent` (server parses os / browser / device) | page load |
+| `$language` | `navigator.language` | page load |
+| `$timezone` | `Intl.DateTimeFormat().resolvedOptions().timeZone` | page load |
+| `$screen_width`, `$screen_height`, `$screen_pixel_ratio` | `screen.*`, `devicePixelRatio` | page load |
+| `$viewport_width`, `$viewport_height` | `window.innerWidth/Height` | event |
+| `$online` | `navigator.onLine` | event |
+| `$connection_type`, `$connection_downlink_mbps`, `$connection_rtt_ms`, `$save_data` | Network Information API (Chromium only today) | event |
+| `$initial_referrer`, `$initial_referrer_host` | `document.referrer` at init | page load |
+| `$utm_source`, `$utm_medium`, `$utm_campaign`, `$utm_term`, `$utm_content`, `$gclid`, `$fbclid` | URL query at init | page load |
+
+Caller-supplied properties on `revu.track(name, props)` always win over engine values on collision, so the host can override anything when it knows better. UA parsing into os / browser / device happens server-side so the SDK stays tiny.
+
 ## Why this codebase looks the way it does
 
 - **Vanilla JavaScript + JSDoc** - the source is plain, runnable ESM. **JSDoc is the single source of truth for both docs and types** (DRY); `tsc` generates `.d.ts` declarations at build time, so consumers still get full TypeScript intellisense without the source being TS.
@@ -54,6 +72,8 @@ sdk-web/
 │       │   ├── transport.js   batching + flush (fetch / sendBeacon) + backoff
 │       │   ├── queue.js       durable offline queue (localStorage-backed)
 │       │   ├── identity.js    anonymous id + identify()
+│       │   ├── context.js     per-event environment (ua, viewport, utm, connection)
+│       │   ├── storage.js     localStorage + cookie persistence
 │       │   ├── config.js      defaults + resolution
 │       │   ├── utils.js       uuid, safe(), truncate (DRY helpers)
 │       │   └── types.js       JSDoc typedefs (single source of types)

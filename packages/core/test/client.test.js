@@ -59,7 +59,11 @@ describe("RevuClient > identify", () => {
     const identify = events.find((e) => e.event_type === "$identify");
     expect(identify).toBeDefined();
     expect(identify?.user_id).toBe("u_42");
-    expect(identify?.properties).toEqual({});
+    // No previous_user_id on the first identify with autoIdentify off.
+    // Environment context ($user_agent, $viewport_*, ...) is merged into
+    // properties on every event - assert only the identify-specific keys
+    // to keep this test focused on transition semantics.
+    expect(identify?.properties.previous_user_id).toBeUndefined();
   });
 
   test("repeat identify with the same userId is a no-op (no duplicate event)", () => {
@@ -80,9 +84,9 @@ describe("RevuClient > identify", () => {
     const identifies = events.filter((e) => e.event_type === "$identify");
     expect(identifies).toHaveLength(2);
     expect(identifies[0].user_id).toBe("u_42");
-    expect(identifies[0].properties).toEqual({});
+    expect(identifies[0].properties.previous_user_id).toBeUndefined();
     expect(identifies[1].user_id).toBe("u_99");
-    expect(identifies[1].properties).toEqual({ previous_user_id: "u_42" });
+    expect(identifies[1].properties.previous_user_id).toBe("u_42");
   });
 
   test("invalid input (empty string, non-string) is a no-op", () => {
@@ -124,7 +128,7 @@ describe("RevuClient > reset", () => {
 
     const resetEvent = events.find((e) => e.event_type === "$reset");
     expect(resetEvent).toBeDefined();
-    expect(resetEvent?.properties).toEqual({ previous_user_id: "u_42" });
+    expect(resetEvent?.properties.previous_user_id).toBe("u_42");
     // Order matters: the $reset event must carry the OLD session_id and
     // user_id so it sorts as the last event of the logged-in session,
     // not as the first event of an empty post-reset session.
@@ -175,5 +179,29 @@ describe("RevuClient > reset", () => {
     expect(identifyEvents).toHaveLength(2);
     expect(identifyEvents[0].session_id).toBe(session1);
     expect(identifyEvents[1].session_id).toBe(session2);
+  });
+});
+
+describe("RevuClient > environment context", () => {
+  test("every event carries the engine-emitted context properties", () => {
+    const { client, events } = makeClient();
+    client.track("Custom Event");
+    const e = events.find((ev) => ev.event_type === "Custom Event");
+    expect(e?.properties.$user_agent).toBeDefined();
+    expect(typeof e?.properties.$viewport_width).toBe("number");
+    expect(typeof e?.properties.$online).toBe("boolean");
+  });
+
+  test("caller-supplied properties win over engine context on collision", () => {
+    // A host that explicitly passes a $viewport_width (e.g. tracking a
+    // custom virtualized layout's "logical" width) should not be silently
+    // overwritten by the SDK's auto-sampled value.
+    const { client, events } = makeClient();
+    client.track("Custom Event", { $viewport_width: 9999, foo: "bar" });
+    const e = events.find((ev) => ev.event_type === "Custom Event");
+    expect(e?.properties.$viewport_width).toBe(9999);
+    expect(e?.properties.foo).toBe("bar");
+    // Other engine fields still ride along untouched.
+    expect(e?.properties.$user_agent).toBeDefined();
   });
 });

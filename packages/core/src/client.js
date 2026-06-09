@@ -5,6 +5,7 @@
  */
 
 import { Capture } from "./capture.js";
+import { Context } from "./context.js";
 import { Identity } from "./identity.js";
 import { Transport } from "./transport.js";
 import { nowIso, routePath, uuid } from "./utils.js";
@@ -18,6 +19,7 @@ export class RevuClient {
       persistentStorage: config.persistentStorage,
       cookieDomain: config.cookieDomain,
     });
+    this.context = new Context();
     this.transport = new Transport({
       host: config.host,
       apiKey: config.apiKey,
@@ -58,7 +60,10 @@ export class RevuClient {
       event_type: eventType,
       screen: routePath(),
       fingerprint: data.fingerprint,
-      properties: data.properties || {},
+      // Environment context first so caller-supplied properties (track(),
+      // capture-layer extras) win on collision: the host always has the
+      // final word over what the SDK auto-populates.
+      properties: { ...this.context.build(), ...(data.properties || {}) },
       device_time: nowIso(),
     };
     this.transport.enqueue(event);
