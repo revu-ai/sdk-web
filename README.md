@@ -76,7 +76,7 @@ revu.init({
 
 A plugin is `{ name: string, install(api): void }`. Inside `install`, the plugin gets `record(type, props)` to emit events through the standard pipeline (identity + environment context + transport), plus read-only access to `identity`, `context`, and `config`.
 
-Plugins live in different distribution units depending on size and lifecycle - the rubric is in [BACKLOG.md](./BACKLOG.md).
+Plugins live in different distribution units depending on size and lifecycle - the rubric is in [ARCHITECTURE.md](./ARCHITECTURE.md).
 
 ## Environment context on every event
 
