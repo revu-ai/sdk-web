@@ -41,6 +41,8 @@ export default [
         PerformanceObserver: "readonly",
         PerformanceEntry: "readonly",
         Document: "readonly",
+        TextEncoder: "readonly",
+        Bun: "readonly",
         Response: "readonly",
         Event: "readonly",
         PopStateEvent: "readonly",
