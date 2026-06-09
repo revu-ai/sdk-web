@@ -23,6 +23,7 @@
  * @property {boolean} [captureWebVitals=true] Emit `$web_vital` events for LCP, INP, and CLS on page hide. Pure-observer, zero PII.
  * @property {boolean} [captureAttention=true] Emit `$tab_hidden`, `$tab_visible`, `$idle`, and `$active` events as the user's attention to the page changes. The engagement clock that powers `$page_leave`'s `engagement_time_ms` always runs regardless of this flag.
  * @property {number} [idleTimeoutMs=30000] Milliseconds of no mouse / keyboard / scroll / touch activity before the user is considered idle. Setting to 0 disables idle detection entirely (engagement_time_ms then ticks as long as the tab is visible).
+ * @property {number} [sessionTimeoutMs=1800000] How long (in ms) a session can sit idle before the next SDK construction rotates to a fresh `session_id`. Default 30 minutes. Set to 0 to disable continuation entirely so every page load gets a brand new session.
  * @property {RevuPlugin[]} [plugins]      Plugins to install during `init()`. Equivalent to calling `revu.use(plugin)` for each, but co-located with the rest of the config.
  */
 

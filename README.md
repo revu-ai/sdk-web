@@ -19,7 +19,7 @@ The SDK assigns every visitor a stable id on first load and keeps it across relo
 
 - **`anonymousId`** - device-level id. UUID generated on first visit, persisted across reloads, survives logout.
 - **`userId`** - person-level id. With `autoIdentify` (default), a UUID is auto-generated on first visit and persisted. Call `revu.identify("real-id")` on login - the manual id wins and is also persisted. `revu.reset()` on logout rotates to a fresh auto id (next visitor on the browser is treated as a new person).
-- **`sessionId`** - per-load id. Rotates on every page load and on `reset()`.
+- **`sessionId`** - rolling session id. By default (`sessionTimeoutMs: 1800000`, 30 minutes) a reload or new tab inside the timeout reuses the prior session id; once activity has paused for longer than the timeout, the next construction rotates. `reset()` always rotates regardless of the window because logout is an explicit hard boundary. Set `sessionTimeoutMs: 0` to disable continuation entirely so every page load gets a brand new session.
 
 Both persistent ids are mirrored to **localStorage and a first-party cookie** by default, so an eviction of one store is recoverable from the other (defends against Safari ITP wiping localStorage). Nothing client-side is truly forever though: a "Clear site data" action, private mode, or a different device all reset the ids. For cross-device, post-clear identity, pass your real auth id via `revu.identify(authUserId)` once the user logs in.
 

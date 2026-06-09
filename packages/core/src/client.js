@@ -20,6 +20,7 @@ export class RevuClient {
       autoIdentify: config.autoIdentify,
       persistentStorage: config.persistentStorage,
       cookieDomain: config.cookieDomain,
+      sessionTimeoutMs: config.sessionTimeoutMs,
     });
     this.context = new Context();
     this.transport = new Transport({
@@ -131,6 +132,10 @@ export class RevuClient {
       device_time: nowIso(),
     };
     this.transport.enqueue(event);
+    // Keep the persisted session.last_seen current so a reload inside the
+    // continuation window picks the same session_id back up. The identity
+    // layer throttles persistence so this is cheap on chatty pages.
+    this.identity.touchSession();
   }
 
   /**

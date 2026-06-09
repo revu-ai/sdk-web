@@ -19,6 +19,7 @@ const DEFAULTS = {
   captureWebVitals: true,
   captureAttention: true,
   idleTimeoutMs: 30000,
+  sessionTimeoutMs: 30 * 60 * 1000,
   plugins: [],
 };
 

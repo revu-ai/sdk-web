@@ -179,3 +179,122 @@ describe("Identity > identify input validation", () => {
     expect(id.userId).toBeNull();
   });
 });
+
+describe("Identity > session continuation", () => {
+  const SESSION_KEY = "revu_session_id";
+  const SESSION_SEEN_KEY = "revu_session_last_seen";
+  // Pin these tests to localStorage-only so they exercise pure session
+  // continuation logic without fighting happy-dom's cookie behavior
+  // (Max-Age=0 in test teardown does not always evict cookie values
+  // between tests in happy-dom's implementation). Cookie persistence has
+  // its own test coverage in storage.test.js.
+  const LS_ONLY = { persistentStorage: /** @type {const} */ ("localStorage") };
+
+  /**
+   * Pin Date.now() for the duration of fn, then restore. Lets tests
+   * advance "wall clock" deterministically across multiple Identity
+   * constructions to simulate gaps between page loads.
+   * @param {(advance: (ms: number) => void) => void} fn
+   */
+  function withMockClock(fn) {
+    const realNow = Date.now;
+    let now = 1_700_000_000_000;
+    Date.now = () => now;
+    try {
+      fn((ms) => { now += ms; });
+    } finally {
+      Date.now = realNow;
+    }
+  }
+
+  test("the first construction generates and persists a fresh session id + last_seen", () => {
+    const id = new Identity(LS_ONLY);
+    expect(id.sessionId).toMatch(/^[0-9a-f]{8}-/i);
+    expect(localStorage.getItem(SESSION_KEY)).toBe(id.sessionId);
+    expect(localStorage.getItem(SESSION_SEEN_KEY)).toBeTruthy();
+  });
+
+  test("a second construction within the timeout reuses the prior session id", () => {
+    withMockClock((advance) => {
+      const first = new Identity({ ...LS_ONLY, sessionTimeoutMs: 60_000 });
+      advance(30_000);
+      const second = new Identity({ ...LS_ONLY, sessionTimeoutMs: 60_000 });
+      expect(second.sessionId).toBe(first.sessionId);
+    });
+  });
+
+  test("a second construction after the timeout rotates to a fresh session id", () => {
+    withMockClock((advance) => {
+      const first = new Identity({ ...LS_ONLY, sessionTimeoutMs: 60_000 });
+      advance(90_000);
+      const second = new Identity({ ...LS_ONLY, sessionTimeoutMs: 60_000 });
+      expect(second.sessionId).not.toBe(first.sessionId);
+    });
+  });
+
+  test("touchSession updates the persisted last_seen so the window slides", () => {
+    withMockClock((advance) => {
+      const first = new Identity({ ...LS_ONLY, sessionTimeoutMs: 60_000 });
+      const originalSession = first.sessionId;
+      advance(50_000); // still inside the window
+      first.touchSession();
+      advance(50_000); // would be past the original window from t=0, but the
+                      // touch resets the clock - total elapsed since the last
+                      // touch is 50s, still inside the 60s window.
+      const reloaded = new Identity({ ...LS_ONLY, sessionTimeoutMs: 60_000 });
+      expect(reloaded.sessionId).toBe(originalSession);
+    });
+  });
+
+  test("touchSession writes are throttled to once per ~5s", () => {
+    withMockClock((advance) => {
+      const id = new Identity({ ...LS_ONLY, sessionTimeoutMs: 60_000 });
+      const initialSeen = localStorage.getItem(SESSION_SEEN_KEY);
+      advance(1000);
+      id.touchSession(); // inside throttle window; should NOT persist
+      expect(localStorage.getItem(SESSION_SEEN_KEY)).toBe(initialSeen);
+      advance(5000); // now past the throttle
+      id.touchSession();
+      expect(localStorage.getItem(SESSION_SEEN_KEY)).not.toBe(initialSeen);
+    });
+  });
+
+  test("sessionTimeoutMs: 0 disables continuation - every construction rotates", () => {
+    withMockClock((advance) => {
+      const first = new Identity({ ...LS_ONLY, sessionTimeoutMs: 0 });
+      advance(1000);
+      const second = new Identity({ ...LS_ONLY, sessionTimeoutMs: 0 });
+      expect(second.sessionId).not.toBe(first.sessionId);
+      // And nothing is persisted to storage.
+      expect(localStorage.getItem(SESSION_KEY)).toBeNull();
+    });
+  });
+
+  test("reset() rotates the session even inside the continuation window", () => {
+    // Logout is a hard boundary that should NEVER survive the continuation
+    // window - a freshly-logged-out browser is treated as a new visit, not
+    // a continuation of the prior one.
+    withMockClock((advance) => {
+      const id = new Identity({ ...LS_ONLY, sessionTimeoutMs: 60_000 });
+      const original = id.sessionId;
+      id.reset();
+      expect(id.sessionId).not.toBe(original);
+      advance(1000);
+      const reloaded = new Identity({ ...LS_ONLY, sessionTimeoutMs: 60_000 });
+      expect(reloaded.sessionId).toBe(id.sessionId);
+      expect(reloaded.sessionId).not.toBe(original);
+    });
+  });
+
+  test("corrupt persisted last_seen (non-numeric) is treated as expired", () => {
+    // Defense in depth: a stray value, a buggy older version's write, or
+    // a user editing storage by hand should not crash the SDK or restore
+    // the wrong session - just rotate.
+    withMockClock(() => {
+      const first = new Identity({ ...LS_ONLY, sessionTimeoutMs: 60_000 });
+      localStorage.setItem(SESSION_SEEN_KEY, "not-a-number");
+      const second = new Identity({ ...LS_ONLY, sessionTimeoutMs: 60_000 });
+      expect(second.sessionId).not.toBe(first.sessionId);
+    });
+  });
+});
