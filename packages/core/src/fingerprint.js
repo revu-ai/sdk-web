@@ -21,14 +21,24 @@ import { truncate } from "./utils.js";
 
 /**
  * Build a fingerprint from a clicked element.
- * Sensitive targets get a redacted fingerprint (no text); see {@link isSensitive}.
+ *
+ * Captures the visible text plus two accessibility labels - `aria-label` and
+ * `title` - so the server's auto-derived feature catalog can fall back from
+ * innerText to aria-label to title when naming a button. Icon-only buttons
+ * (think GitHub's star button) have no visible text but always have one of
+ * those labels; without them they would land in the catalog as "(unnamed
+ * button)" and need manual curation.
+ *
+ * Sensitive targets get a redacted fingerprint (no text, no labels); see
+ * {@link isSensitive}.
  * @param {Element} el
  * @returns {import("./types.js").Fingerprint}
  */
 export function fingerprint(el) {
   const tag = el.tagName.toLowerCase();
   const sensitive = isSensitive(el);
-  return {
+  /** @type {import("./types.js").Fingerprint} */
+  const fp = {
     tag,
     text: sensitive ? undefined : truncate(safeTextOf(el), 120),
     role: el.getAttribute("role") || undefined,
@@ -37,6 +47,13 @@ export function fingerprint(el) {
     selector: selectorOf(el),
     ordinal: ordinalOf(el),
   };
+  if (!sensitive) {
+    const ariaLabel = el.getAttribute("aria-label");
+    if (ariaLabel) fp.aria_label = truncate(ariaLabel, 120);
+    const title = el.getAttribute("title");
+    if (title) fp.title = truncate(title, 120);
+  }
+  return fp;
 }
 
 /**

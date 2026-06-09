@@ -72,6 +72,8 @@
  * @typedef {object} Fingerprint
  * @property {string} tag                  Element tag (e.g. "button").
  * @property {string} [text]               Visible text (truncated; masked if sensitive).
+ * @property {string} [aria_label]         Value of `aria-label` attribute when present (truncated; masked if sensitive). Lets the server name icon-only buttons that have no visible text.
+ * @property {string} [title]              Value of the `title` attribute when present (truncated; masked if sensitive). Used as a fallback label after text and aria-label.
  * @property {string} [role]               ARIA role / type.
  * @property {string} [id]                 Element id, if present (stable).
  * @property {string[]} [classes]          Class list (medium stability).

@@ -636,3 +636,177 @@ describe("Capture - page leave + engagement time", () => {
   });
 });
 
+describe("Capture - autocapture element semantics", () => {
+  /**
+   * The fingerprint shipped with every $autocapture click is the only thing
+   * the server has to name an action and build the auto-derived feature
+   * catalog. These tests pin every field that downstream classification
+   * relies on so a future refactor of fingerprint.js cannot quietly drop
+   * one and break Feature Adoption.
+   */
+
+  test("clicking a button captures tag, text, id, classes, and a selector", () => {
+    const btn = document.createElement("button");
+    btn.id = "sign-up";
+    btn.classList.add("btn", "btn-primary");
+    btn.textContent = "Sign up";
+    document.body.appendChild(btn);
+
+    const { cap, events } = makeCapture();
+    cap.start();
+    btn.click();
+
+    const fp = events.find((e) => e.type === "$autocapture")?.data.fingerprint;
+    expect(fp).toBeDefined();
+    expect(fp.tag).toBe("button");
+    expect(fp.text).toBe("Sign up");
+    expect(fp.id).toBe("sign-up");
+    expect(fp.classes).toEqual(["btn", "btn-primary"]);
+    expect(fp.selector).toBe("#sign-up");
+  });
+
+  test("clicking an anchor captures the link text and tag", () => {
+    const a = document.createElement("a");
+    a.href = "/docs";
+    a.textContent = "Read the docs";
+    document.body.appendChild(a);
+
+    const { cap, events } = makeCapture();
+    cap.start();
+    a.click();
+
+    const fp = events.find((e) => e.type === "$autocapture")?.data.fingerprint;
+    expect(fp).toBeDefined();
+    expect(fp.tag).toBe("a");
+    expect(fp.text).toBe("Read the docs");
+  });
+
+  test("captures aria-label so an icon-only button is still nameable", () => {
+    const btn = document.createElement("button");
+    btn.setAttribute("aria-label", "Close dialog");
+    // Inner SVG icon, no visible text.
+    btn.innerHTML = "<svg></svg>";
+    document.body.appendChild(btn);
+
+    const { cap, events } = makeCapture();
+    cap.start();
+    btn.click();
+
+    const fp = events.find((e) => e.type === "$autocapture")?.data.fingerprint;
+    expect(fp).toBeDefined();
+    expect(fp.aria_label).toBe("Close dialog");
+    // No visible text means the server falls back to aria-label.
+    expect(fp.text).toBeUndefined();
+  });
+
+  test("captures the title attribute (used as a final-resort label)", () => {
+    const a = document.createElement("a");
+    a.href = "/profile";
+    a.title = "View profile";
+    a.innerHTML = "<svg></svg>";
+    document.body.appendChild(a);
+
+    const { cap, events } = makeCapture();
+    cap.start();
+    a.click();
+
+    const fp = events.find((e) => e.type === "$autocapture")?.data.fingerprint;
+    expect(fp.title).toBe("View profile");
+    expect(fp.text).toBeUndefined();
+  });
+
+  test("captures the role attribute on a div-as-button", () => {
+    const div = document.createElement("div");
+    div.setAttribute("role", "button");
+    div.textContent = "Custom button";
+    document.body.appendChild(div);
+
+    const { cap, events } = makeCapture();
+    cap.start();
+    div.click();
+
+    const fp = events.find((e) => e.type === "$autocapture")?.data.fingerprint;
+    expect(fp.tag).toBe("div");
+    expect(fp.role).toBe("button");
+    expect(fp.text).toBe("Custom button");
+  });
+
+  test("aria-label is truncated to 120 characters", () => {
+    const btn = document.createElement("button");
+    btn.setAttribute("aria-label", "A".repeat(200));
+    document.body.appendChild(btn);
+
+    const { cap, events } = makeCapture();
+    cap.start();
+    btn.click();
+
+    const fp = events.find((e) => e.type === "$autocapture")?.data.fingerprint;
+    expect(typeof fp.aria_label).toBe("string");
+    expect(fp.aria_label.length).toBeLessThanOrEqual(123); // 120 + ellipsis budget
+  });
+
+  test("clicking inside a sensitive input does not capture aria-label or title", () => {
+    // Defense in depth: even when a host annotates an <input> with a
+    // descriptive aria-label that is itself sensitive ("Credit card number"),
+    // the fingerprint must stay redacted to match the masking-at-source
+    // invariant. The visible-text test in the input-masking block already
+    // covers `text`; this pins the same for the two new label fields.
+    const input = document.createElement("input");
+    input.type = "text";
+    input.setAttribute("aria-label", "Credit card number");
+    input.setAttribute("title", "Enter your full card number");
+    input.value = "4242 4242 4242 4242";
+    document.body.appendChild(input);
+
+    const { cap, events } = makeCapture();
+    cap.start();
+    input.click();
+
+    const fp = events.find((e) => e.type === "$autocapture")?.data.fingerprint;
+    expect(fp.text).toBeUndefined();
+    expect(fp.aria_label).toBeUndefined();
+    expect(fp.title).toBeUndefined();
+  });
+
+  test("captures the sibling ordinal so identical buttons are distinguishable", () => {
+    const list = document.createElement("div");
+    for (let i = 0; i < 3; i++) {
+      const btn = document.createElement("button");
+      btn.textContent = "Buy";
+      list.appendChild(btn);
+    }
+    document.body.appendChild(list);
+
+    const { cap, events } = makeCapture();
+    cap.start();
+    /** @type {HTMLButtonElement} */ (list.children[1]).click();
+
+    const fp = events.find((e) => e.type === "$autocapture")?.data.fingerprint;
+    expect(fp.ordinal).toBe(1);
+  });
+
+  test("clicking the inner icon of a button still fingerprints the icon, not the parent", () => {
+    // The fingerprint module captures the click target verbatim; promoting
+    // to the containing button is a downstream concern (link classification
+    // walks anchors, but generic-element walks do not). This test pins the
+    // current contract so a refactor cannot silently change it.
+    const btn = document.createElement("button");
+    btn.id = "save";
+    const icon = document.createElement("span");
+    icon.className = "icon-save";
+    icon.textContent = "Save";
+    btn.appendChild(icon);
+    document.body.appendChild(btn);
+
+    const { cap, events } = makeCapture();
+    cap.start();
+    icon.click();
+
+    const fp = events.find((e) => e.type === "$autocapture")?.data.fingerprint;
+    expect(fp.tag).toBe("span");
+    expect(fp.classes).toEqual(["icon-save"]);
+    // Selector walks ancestors up to the nearest id, so we still see "#save".
+    expect(fp.selector).toContain("#save");
+  });
+});
+
