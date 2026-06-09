@@ -24,7 +24,7 @@
     <p>
       Most things are autocaptured. For domain-specific signals the page can't see
       (a server-side payment completing, an async export, a wizard step), call
-      <code>revu.track</code>:
+      <code>revu.capture</code>:
     </p>
     <button id="checkout">Simulate checkout_completed</button>
     <button id="export">Simulate report_exported</button>
@@ -55,21 +55,21 @@
         },
       });
 
-      // Custom event demos. revu.track(name, properties?) sends a named
+      // Custom event demos. revu.capture(name, properties?) sends a named
       // event through the same pipeline as autocapture - identity,
       // environment context, and the same $ engine properties stamp it
       // identically to a $pageview or $autocapture. Use snake_case for
       // event names and keep properties flat (string / number / boolean /
       // null) so they group cleanly in the dashboard.
       document.getElementById("checkout").addEventListener("click", () => {
-        revu.track("checkout_completed", {
+        revu.capture("checkout_completed", {
           plan: "pro",
           amount_cents: 4900,
           currency: "USD",
         });
       });
       document.getElementById("export").addEventListener("click", () => {
-        revu.track("report_exported", { format: "pdf", pages: 12 });
+        revu.capture("report_exported", { format: "pdf", pages: 12 });
       });
     </script>
   </body>

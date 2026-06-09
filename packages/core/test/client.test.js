@@ -103,7 +103,7 @@ describe("RevuClient > identify", () => {
   test("subsequent track() events carry the identified user_id", () => {
     const { client, events } = makeClient();
     client.identify("u_42");
-    client.track("Plan Upgraded", { tier: "pro" });
+    client.capture("Plan Upgraded", { tier: "pro" });
 
     const track = events.find((e) => e.event_type === "Plan Upgraded");
     expect(track?.user_id).toBe("u_42");
@@ -154,7 +154,7 @@ describe("RevuClient > reset", () => {
     client.reset();
     const newSession = client.identity.sessionId;
 
-    client.track("Post Logout Click");
+    client.capture("Post Logout Click");
 
     const after = events.find((e) => e.event_type === "Post Logout Click");
     expect(after?.session_id).toBe(newSession);
@@ -185,7 +185,7 @@ describe("RevuClient > reset", () => {
 describe("RevuClient > environment context", () => {
   test("every event carries the engine-emitted context properties", () => {
     const { client, events } = makeClient();
-    client.track("Custom Event");
+    client.capture("Custom Event");
     const e = events.find((ev) => ev.event_type === "Custom Event");
     expect(e?.properties.$user_agent).toBeDefined();
     expect(typeof e?.properties.$viewport_width).toBe("number");
@@ -197,7 +197,7 @@ describe("RevuClient > environment context", () => {
     // custom virtualized layout's "logical" width) should not be silently
     // overwritten by the SDK's auto-sampled value.
     const { client, events } = makeClient();
-    client.track("Custom Event", { $viewport_width: 9999, foo: "bar" });
+    client.capture("Custom Event", { $viewport_width: 9999, foo: "bar" });
     const e = events.find((ev) => ev.event_type === "Custom Event");
     expect(e?.properties.$viewport_width).toBe(9999);
     expect(e?.properties.foo).toBe("bar");

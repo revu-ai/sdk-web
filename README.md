@@ -9,7 +9,7 @@ revu.init({ apiKey: "your-write-key" });
 // That's it - page views and clicks are captured automatically.
 // Every event already carries a persistent visitor id (autoIdentify).
 revu.identify("user-123");                      // on login, replaces the auto id
-revu.track("Plan Upgraded", { tier: "pro" });   // optional explicit event
+revu.capture("Plan Upgraded", { tier: "pro" });   // optional explicit event
 revu.reset();                                   // on logout
 ```
 
@@ -98,33 +98,33 @@ Every event also carries engine-emitted properties (prefixed `$`) so the dashboa
 | `$initial_referrer`, `$initial_referrer_host` | `document.referrer` at init | page load |
 | `$utm_source`, `$utm_medium`, `$utm_campaign`, `$utm_term`, `$utm_content`, `$gclid`, `$fbclid` | URL query at init | page load |
 
-Caller-supplied properties on `revu.track(name, props)` always win over engine values on collision, so the host can override anything when it knows better. UA parsing into os / browser / device happens server-side so the SDK stays tiny - and so do derivations like "first seen at" and "new vs returning", which the server computes deterministically from the event stream and so survive SDK upgrades and partial storage corruption.
+Caller-supplied properties on `revu.capture(name, props)` always win over engine values on collision, so the host can override anything when it knows better. UA parsing into os / browser / device happens server-side so the SDK stays tiny - and so do derivations like "first seen at" and "new vs returning", which the server computes deterministically from the event stream and so survive SDK upgrades and partial storage corruption.
 
 ## Custom events
 
-The autocapture stream covers most of what a product analytics tool needs - every click, every pageview, every form submit lands as a structured event without any code. For domain-specific signals that autocapture cannot see (a server-side payment completing, a websocket message, a wizard step that does not change the URL), call `revu.track`:
+The autocapture stream covers most of what a product analytics tool needs - every click, every pageview, every form submit lands as a structured event without any code. For domain-specific signals that autocapture cannot see (a server-side payment completing, a websocket message, a wizard step that does not change the URL), call `revu.capture`:
 
 ```js
 // On a successful checkout.
-revu.track("checkout_completed", {
+revu.capture("checkout_completed", {
   plan: "pro",
   amount_cents: 4900,
   currency: "USD",
 });
 
 // On a feature being used.
-revu.track("report_exported", { format: "pdf", pages: 12 });
+revu.capture("report_exported", { format: "pdf", pages: 12 });
 ```
 
 The first argument is the event name (snake_case is the convention, mirrors the auto-captured `$pageview` / `$autocapture` / `$rageclick` style without the leading `$`). The second argument is an optional flat object of properties; values can be strings, numbers, booleans, or null. The SDK adds identity, environment context, and the same `$` engine properties listed above, so a tracked event arrives at the server with the same shape as an autocaptured one.
 
-When to reach for `revu.track`:
+When to reach for `revu.capture`:
 
 - **Server-side completions** the page does not see (payment captured, async export ready).
 - **Cross-page funnels** where the meaningful step is not a navigation (clicking through a wizard tab, finishing onboarding).
 - **Domain conversions** you want to count consistently across teams (signed up, upgraded, churned).
 
-When to skip it: anything autocapture already names. A click on a `<button>Get a demo</button>` is already an event - the future Features view groups it by its label (visible text, then `aria-label`, then `title`, then `id`) without any code. Calling `revu.track("demo_button_clicked")` on top of it duplicates the signal and forks the count.
+When to skip it: anything autocapture already names. A click on a `<button>Get a demo</button>` is already an event - the future Features view groups it by its label (visible text, then `aria-label`, then `title`, then `id`) without any code. Calling `revu.capture("demo_button_clicked")` on top of it duplicates the signal and forks the count.
 
 ## Why this codebase looks the way it does
 

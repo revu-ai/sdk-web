@@ -72,11 +72,17 @@ const revu = {
   }, onError),
 
   /**
-   * Capture a custom event.
+   * Capture a custom event by name. Use for signals autocapture cannot
+   * see (server-side completions, async events, wizard steps that do not
+   * change the URL). For anything autocapture already names (a click on
+   * a button, a form submit, a pageview), prefer letting the auto-derived
+   * feature catalog group it - calling capture() on top duplicates the
+   * signal.
+   *
    * @param {string} eventType
    * @param {Record<string, unknown>} [properties]
    */
-  track: safe((eventType, properties) => client?.track(eventType, properties), onError),
+  capture: safe((eventType, properties) => client?.capture(eventType, properties), onError),
 
   /**
    * Link the anonymous visitor to a known user id (on login/register).

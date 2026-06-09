@@ -17,5 +17,5 @@ import revu from "../../src/index.js";
 
 revu.init({ apiKey: "test_key" });
 revu.identify("user-42");
-revu.track("test_event", { foo: "bar" });
+revu.capture("test_event", { foo: "bar" });
 revu.reset();

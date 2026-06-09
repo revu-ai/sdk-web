@@ -41,7 +41,11 @@ export class RevuClient {
       idleTimeoutMs: config.idleTimeoutMs,
       captureAttention: config.captureAttention,
     });
-    this.capture = new Capture(
+    // Renamed from `this.capture` to free the verb for the public
+     // `capture(eventName, properties)` method below. The field still
+     // refers to the auto-capture engine specifically, so `autocapture`
+     // reads more accurately too.
+    this.autocapture = new Capture(
       emit,
       { maskAllInputs: config.maskAllInputs },
       this.attention,
@@ -63,7 +67,7 @@ export class RevuClient {
     // Attention starts before capture so the engagement clock is already
     // ticking when the initial $pageview fires.
     this.attention.start();
-    if (this.config.autocapture) this.capture.start();
+    if (this.config.autocapture) this.autocapture.start();
     if (this.config.captureWebVitals !== false) this.vitals.start();
     for (const plugin of this._plugins) {
       if (!this._installed.has(plugin.name)) this._installPlugin(plugin);
@@ -125,9 +129,9 @@ export class RevuClient {
       event_type: eventType,
       screen: routePath(),
       fingerprint: data.fingerprint,
-      // Environment context first so caller-supplied properties (track(),
-      // capture-layer extras) win on collision: the host always has the
-      // final word over what the SDK auto-populates.
+      // Environment context first so caller-supplied properties
+      // (capture(), capture-layer extras) win on collision: the host
+      // always has the final word over what the SDK auto-populates.
       properties: { ...this.context.build(), ...(data.properties || {}) },
       device_time: nowIso(),
     };
@@ -140,10 +144,19 @@ export class RevuClient {
 
   /**
    * Capture a custom (explicit) event.
+   *
+   * Public verb of the SDK, on purpose. REVU's wedge is autocapture - the
+   * dashboard auto-derives a feature catalog from every click, form submit,
+   * download, and pageview with zero code. When a host needs to send a
+   * signal autocapture cannot see (a server-side payment completing, a
+   * websocket message, a wizard step that does not change the URL), this
+   * is the same verb extended: "we capture everything automatically, AND
+   * here is how to also capture this".
+   *
    * @param {string} eventType
    * @param {Record<string, unknown>} [properties]
    */
-  track(eventType, properties) {
+  capture(eventType, properties) {
     this.record(eventType, { properties });
   }
 

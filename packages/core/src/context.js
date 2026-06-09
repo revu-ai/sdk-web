@@ -19,7 +19,7 @@
  *     than trying to observe every change.
  *
  * Field naming follows the existing `$pageview` / `$autocapture` convention:
- * every engine-emitted property is `$`-prefixed so custom track() properties
+ * every engine-emitted property is `$`-prefixed so custom capture() properties
  * remain in their own namespace and never collide.
  */
 
@@ -132,7 +132,7 @@ export class Context {
   /**
    * Build the merged context for an event. Session values are stable
    * across the page load; volatile values are sampled fresh on each call.
-   * Caller-supplied properties (passed to track() or attached by the
+   * Caller-supplied properties (passed to capture() or attached by the
    * capture layer) override engine values on collision so a host that
    * knows better than the SDK can always do so.
    * @returns {Record<string, unknown>}
