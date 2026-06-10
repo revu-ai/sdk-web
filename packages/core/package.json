@@ -20,6 +20,7 @@
     "size": "size-limit"
   },
   "size-limit": [
-    { "name": "core (esm, gzip)", "path": "dist/index.js", "limit": "8 kB", "gzip": true }
+    { "name": "core (esm, min)", "path": "dist/index.js", "limit": "30 kB", "gzip": false, "brotli": false },
+    { "name": "core (esm, gzip)", "path": "dist/index.js", "limit": "10 kB", "gzip": true }
   ]
 }

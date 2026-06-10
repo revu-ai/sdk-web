@@ -132,6 +132,15 @@ When to skip it: anything autocapture already names. A click on a `<button>Get a
 - **Lean core + opt-in modules (monorepo)** - `@revu-ai/core` is the only required package; `surveys`, `replay`, etc. are added later as separate packages that share the core. Unused modules ship **zero** bytes.
 - **Never block, never crash the host** - every public entry point is wrapped so an internal failure is swallowed (and, in debug, logged) instead of bubbling into the host page. All work is kept off the critical path.
 
+## Size
+
+| Metric | Current | Budget |
+|---|---|---|
+| Minified | **21.8 kB** | 30 kB |
+| Gzipped on wire | **7.0 kB** | 10 kB |
+
+Both metrics are CI gates (`bun run size`, via `size-limit`). Gzipped size is the transfer cost users pay; minified size is the parse and compile cost the browser pays on low-end devices. To our knowledge, the lean core is the smallest among shipping web behavioral analytics SDKs on both axes. New capabilities ship as opt-in modules so the lean core stays lean, and each module is independently budgeted so the full default-on cold-load stays tight as the SDK grows.
+
 ## Structure
 
 ```
