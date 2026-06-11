@@ -56,6 +56,29 @@ describe("config", () => {
       resolveConfig({ apiKey: "k", host: "" }),
     ).toThrow(/host must be a non-empty string/);
   });
+
+  test("defaults environment to production", () => {
+    const c = resolveConfig({ apiKey: "k" });
+    expect(c.environment).toBe("production");
+  });
+
+  test("accepts staging and development environments", () => {
+    expect(resolveConfig({ apiKey: "k", environment: "staging" }).environment).toBe("staging");
+    expect(resolveConfig({ apiKey: "k", environment: "development" }).environment).toBe(
+      "development",
+    );
+  });
+
+  test("rejects an unknown environment string", () => {
+    expect(() =>
+      // @ts-expect-error - intentionally invalid
+      resolveConfig({ apiKey: "k", environment: "prod" }),
+    ).toThrow(/environment must be/);
+    expect(() =>
+      // @ts-expect-error - intentionally invalid
+      resolveConfig({ apiKey: "k", environment: 1 }),
+    ).toThrow(/environment must be/);
+  });
 });
 
 describe("utils", () => {

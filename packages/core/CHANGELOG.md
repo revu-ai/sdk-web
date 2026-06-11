@@ -25,6 +25,7 @@ First public release. Lean capture core for web behavioral analytics: one-line i
 - **Durable offline queue.** `localStorage`-backed buffer survives reloads and offline gaps. Auto-flushes on the `online` event so events captured offline ship the moment connectivity returns.
 - **Plugin contract.** `revu.use(plugin)` or `init({ plugins: [...] })`. Plugins registered before init are queued and drained on init. The Web Vitals layer ships through this contract as a built-in plugin.
 - **Environment context.** Every event carries `$user_agent`, viewport and screen dimensions, language, timezone, and referrer host stamped at capture time.
+- **Environment label.** `environment: "production" | "staging" | "development"` config field (default `"production"`) stamps `$environment` on every event so the dashboard can keep dev and staging traffic out of the production view. Invalid values throw at init.
 - **Input masking.** `data-revu-mask` attribute opts a subtree out of text-content capture; sensitive `<input>` types (`password`, `email`, `tel`, `credit-card`, `search`) are redacted at source. Form submits emit metadata only (`field_names`, `field_types`, `field_count`), never values.
 
 ### Architecture

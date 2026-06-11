@@ -38,9 +38,15 @@ const UTM_KEYS = [
  * record() call, and merge the two via {@link build}.
  */
 export class Context {
-  constructor() {
+  /**
+   * @param {{ environment?: "production"|"staging"|"development" }} [opts]
+   */
+  constructor(opts = {}) {
     /** @type {Record<string, unknown>} */
     this.session = this._buildSessionContext();
+    if (opts.environment) {
+      this.session.$environment = opts.environment;
+    }
   }
 
   /**

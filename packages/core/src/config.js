@@ -5,6 +5,7 @@
 /** @type {Omit<import("./types.js").ResolvedConfig, "apiKey">} */
 const DEFAULTS = {
   host: "https://api.revu.ai",
+  environment: "production",
   autocapture: true,
   autoIdentify: true,
   persistentStorage: "both",
@@ -22,6 +23,8 @@ const DEFAULTS = {
   sessionTimeoutMs: 30 * 60 * 1000,
   plugins: [],
 };
+
+const VALID_ENVIRONMENTS = new Set(["production", "staging", "development"]);
 
 /**
  * Merge user config over defaults and validate the required fields.
@@ -42,7 +45,25 @@ export function resolveConfig(config) {
   }
   const merged = { ...DEFAULTS, ...config };
   validateHost(merged.host);
+  validateEnvironment(merged.environment);
   return merged;
+}
+
+/**
+ * Validate `environment` against the three accepted values. Anything else
+ * (custom strings, numbers, undefined) is a config typo; throw with a clear
+ * message so the developer sees it in the console. The dashboard reads
+ * default to `environment = "production"` so stamping an arbitrary string
+ * would silently make the events invisible to the default view.
+ *
+ * @param {unknown} environment
+ */
+function validateEnvironment(environment) {
+  if (!VALID_ENVIRONMENTS.has(/** @type {string} */ (environment))) {
+    throw new Error(
+      `[REVU] init() environment must be "production", "staging", or "development", got ${JSON.stringify(environment)}`,
+    );
+  }
 }
 
 /**

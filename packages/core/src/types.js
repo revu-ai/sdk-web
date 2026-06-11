@@ -9,6 +9,7 @@
  * @typedef {object} RevuConfig
  * @property {string} apiKey               Public ingest write-key (org/entity resolved server-side).
  * @property {string} [host="https://api.revu.ai"] Ingest host base URL (the API service, not the app/dashboard).
+ * @property {"production"|"staging"|"development"} [environment="production"] Environment label stamped on every event as `properties.$environment`. The dashboard filters out non-production environments by default so dev clicks and staging integration tests do not pollute production analytics. Invalid values throw at init.
  * @property {boolean} [autocapture=true]  Auto-capture clicks + page views with no instrumentation.
  * @property {boolean} [autoIdentify=true] Auto-generate a persistent user id on first visit so every event arrives attributed to a stable visitor. Explicit `identify()` always overrides and is also persisted. Set to false to keep `user_id` null until the host app calls `identify()`.
  * @property {"localStorage"|"cookie"|"both"} [persistentStorage="both"] Where identity ids are persisted across reloads. `"both"` mirrors to localStorage and a first-party cookie so an eviction of one store is recoverable from the other (defends against Safari ITP wiping localStorage). `"localStorage"` removes the per-request cookie bandwidth on the host domain. `"cookie"` is rarely the right choice but available for completeness.

@@ -89,6 +89,24 @@ describe("Context > UTM and click ids", () => {
   });
 });
 
+describe("Context > environment", () => {
+  test("stamps $environment when provided", () => {
+    const ctx = new Context({ environment: "staging" }).build();
+    expect(ctx.$environment).toBe("staging");
+  });
+
+  test("omits $environment when no opt is provided", () => {
+    const ctx = new Context().build();
+    expect(ctx.$environment).toBeUndefined();
+  });
+
+  test("$environment is session-stable across build() calls", () => {
+    const c = new Context({ environment: "development" });
+    expect(c.build().$environment).toBe("development");
+    expect(c.build().$environment).toBe("development");
+  });
+});
+
 describe("Context > referrer", () => {
   test("captures document.referrer when present", () => {
     // happy-dom doesn't set document.referrer from the registrator URL, so

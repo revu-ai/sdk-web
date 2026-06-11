@@ -22,7 +22,7 @@ export class RevuClient {
       cookieDomain: config.cookieDomain,
       sessionTimeoutMs: config.sessionTimeoutMs,
     });
-    this.context = new Context();
+    this.context = new Context({ environment: config.environment });
     this.transport = new Transport({
       host: config.host,
       apiKey: config.apiKey,

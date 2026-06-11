@@ -41,6 +41,8 @@ ESM only. Zero runtime dependencies. **21.3 kB minified / 6.9 kB gzipped.**
 
 Every event also carries environment context (`$user_agent`, viewport, language, timezone, referrer, UTM and click ids) so the server can break down by browser, locale, and campaign without host wiring.
 
+Set `environment: "staging"` (or `"development"`) in `init()` to keep non-prod traffic out of the default dashboard view. The label is stamped on every event as `$environment`. Default is `"production"`.
+
 ## Identity
 
 - **`anonymousId`** (device-level) generated on first visit, persisted across reloads.
@@ -96,6 +98,7 @@ Both axes are CI gates (`bun run size`). Gzipped size is the transfer cost users
 revu.init({
   apiKey: "...",                  // required, public write key (prefix revu_pk_)
   host: "https://api.revu.ai",    // default
+  environment: "production",      // "production" | "staging" | "development"
   autoIdentify: true,             // auto-assign userId on first visit
   persistentStorage: "both",      // "both" | "localStorage"
   cookieDomain: ".example.com",   // share visitor across subdomains
