@@ -55,6 +55,8 @@ Set `environment: "staging"` (or `"development"`) in `init()` to keep non-prod t
 
 Both persistent ids are mirrored to localStorage and a first-party cookie by default, so eviction of one store recovers from the other.
 
+For cross-device flows (a user signs up on desktop, clicks an email link on their phone), call `revu.alias(authoritativeId)` on the second device after auth resolves. Unlike `identify()`, `alias()` does not change the local user id; it tells the server the current id is the same person as `authoritativeId` so dashboards stitch the journey. Idempotent: repeated calls with the same id produce one mapping.
+
 ## Custom events
 
 For signals autocapture cannot see (server-side completions, async events, wizard steps that do not change the URL):

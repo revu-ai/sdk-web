@@ -184,6 +184,44 @@ export class RevuClient {
   }
 
   /**
+   * Join the current device's identity to a separate, authoritative
+   * identity for the same person without changing the local user id.
+   *
+   * Distinct from {@link identify}:
+   *   - `identify()` means "this device now knows the user's id". The
+   *     local user_id changes and subsequent events ship under it.
+   *   - `alias()` means "the current id is the same person as
+   *     `authoritativeId`". The local user_id does NOT change; the server
+   *     records a mapping so prior and future events under either id
+   *     resolve to the canonical person.
+   *
+   * The motivating flow is cross-device: a user signs up on desktop, the
+   * server emails them a link, they click on their phone. The phone has
+   * its own auto-assigned user id. Calling `alias(authoritativeId)` on
+   * the phone after auth resolves tells the server the two devices
+   * belong to the same human, so dashboards stitch the journey.
+   *
+   * Idempotent: the server upserts on `(organization, alias_user_id)`,
+   * so calling `alias()` twice with the same id produces one mapping,
+   * not two. No-op when `authoritativeId` is empty / non-string or
+   * already equals the current user id.
+   *
+   * @param {string} authoritativeId
+   */
+  alias(authoritativeId) {
+    if (typeof authoritativeId !== "string" || authoritativeId.length === 0) return;
+    const currentUserId = this.identity.userId;
+    if (currentUserId === authoritativeId) return;
+    this.record("$alias", {
+      properties: {
+        authoritative_id: authoritativeId,
+        current_user_id: currentUserId,
+        current_anonymous_id: this.identity.anonymousId,
+      },
+    });
+  }
+
+  /**
    * Sign-out counterpart to {@link identify}: emit a synthetic `$reset`
    * event marking the close of the identified session, then clear the
    * user id and regenerate the session id. The anonymous id is

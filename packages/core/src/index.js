@@ -91,6 +91,18 @@ const revu = {
   identify: safe((userId) => client?.identify(userId), onError),
 
   /**
+   * Join the current device's identity to a separate, authoritative
+   * identity for the same person without changing the local user id.
+   * Distinct from {@link revu.identify}: identify replaces the local
+   * id; alias joins it to a canonical one. The motivating flow is
+   * cross-device (sign up on desktop, click email link on phone). The
+   * server upserts on `(organization, alias_user_id)`, so repeated
+   * calls produce one mapping, not duplicates.
+   * @param {string} authoritativeId
+   */
+  alias: safe((authoritativeId) => client?.alias(authoritativeId), onError),
+
+  /**
    * Sign-out counterpart to {@link revu.identify}: clear the identified
    * user, regenerate the session id, and emit a `$reset` event marking
    * the end of the logged-in session. The anonymous id is preserved.
