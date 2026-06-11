@@ -1,5 +1,9 @@
 # @revu-ai/core
 
+[![npm](https://img.shields.io/npm/v/@revu-ai/core.svg)](https://www.npmjs.com/package/@revu-ai/core)
+[![ci](https://github.com/revu-ai/sdk-web/actions/workflows/ci.yml/badge.svg)](https://github.com/revu-ai/sdk-web/actions/workflows/ci.yml)
+[![license](https://img.shields.io/npm/l/@revu-ai/core.svg)](https://github.com/revu-ai/sdk-web/blob/main/LICENSE)
+
 One-line web behavioral analytics. The lean capture core for [REVU](https://revu.ai), the Feedback and Behavior Intelligence platform.
 
 ```js
@@ -129,6 +133,10 @@ revu.init({ apiKey: "...", plugins: [exceptions()] });
 - **Zero runtime dependencies.** Platform and Web APIs only.
 - **Tree-shakeable** (`"sideEffects": false`); unused modules drop out at the consumer's bundler.
 - **Defensive boundary.** Every public entry is `safe()`-wrapped so an internal failure never propagates into the host page.
+
+## Browser support
+
+Modern evergreen browsers from early 2021 onward: **Safari 14+, Chrome 88+, Firefox 88+, Edge 88+**. The SDK uses platform APIs (`fetch`, `localStorage`, `sendBeacon`, `PerformanceObserver`, `MutationObserver`, `Intl.DateTimeFormat`, `crypto.getRandomValues`, the URL constructor) that all browsers in that floor support. Optional APIs (Network Information for connection type) are read defensively and absent in some engines without affecting capture.
 
 ## Changelog
 
