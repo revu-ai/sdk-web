@@ -14,8 +14,9 @@
 import { RevuClient } from "./client.js";
 import { resolveConfig } from "./config.js";
 import { safe } from "./utils.js";
+import { VERSION } from "./version.js";
 
-export { RevuClient };
+export { RevuClient, VERSION };
 export * from "./types.js";
 
 /** @type {RevuClient|null} */
@@ -112,6 +113,13 @@ const revu = {
 
   /** Flush buffered events immediately. @returns {Promise<boolean>|undefined} */
   flush: safe(() => client?.flush(), onError),
+
+  /**
+   * Build version of `@revu-ai/core` baked into this bundle. Useful for
+   * support tickets, console introspection (`console.log(revu.version)`),
+   * and feature-gating consumer code on the SDK build it loaded.
+   */
+  version: VERSION,
 };
 
 export default revu;

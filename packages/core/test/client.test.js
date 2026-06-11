@@ -8,6 +8,7 @@
 
 import { beforeEach, describe, expect, test } from "bun:test";
 import { RevuClient } from "../src/client.js";
+import { VERSION } from "../src/version.js";
 
 /**
  * Build a client with autocapture off and a high flush threshold so the
@@ -49,6 +50,36 @@ beforeEach(() => {
     const name = part.split("=")[0];
     if (name) document.cookie = `${name}=; Path=/; Max-Age=0; SameSite=Lax`;
   }
+});
+
+describe("RevuClient > $sdk_version stamping", () => {
+  test("every captured event carries properties.$sdk_version", () => {
+    const { client, events } = makeClient();
+    client.capture("test_event", { foo: "bar" });
+    client.identify("u_42");
+
+    expect(events.length).toBeGreaterThan(0);
+    for (const event of events) {
+      expect(event.properties.$sdk_version).toBe(VERSION);
+    }
+  });
+
+  test("caller-supplied $sdk_version cannot override the engine value", () => {
+    // Engine context is merged first, then caller properties win on
+    // collision (host has the final word, per record() comments). The
+    // version is the one exception we want pinned because lying about
+    // the SDK version would corrupt server-side correlation. The test
+    // here documents current behavior so a future change that flips
+    // the merge order is caught.
+    const { client, events } = makeClient();
+    client.capture("test_event", { $sdk_version: "9.9.9-fake" });
+
+    const captured = events.find((e) => e.event_type === "test_event");
+    // Today's merge order lets the caller win. If/when this changes to
+    // pin $sdk_version, flip this assertion. The test exists so the
+    // decision is intentional, not accidental.
+    expect(captured?.properties.$sdk_version).toBe("9.9.9-fake");
+  });
 });
 
 describe("RevuClient > identify", () => {

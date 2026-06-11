@@ -88,6 +88,7 @@ Every event also carries engine-emitted properties (prefixed `$`) so the dashboa
 
 | Field | Source | Stable per |
 |---|---|---|
+| `$sdk_version` | Build version of `@revu-ai/core` baked into this bundle | bundle |
 | `$user_agent` | `navigator.userAgent` (server parses os / browser / device) | page load |
 | `$language` | `navigator.language` | page load |
 | `$timezone` | `Intl.DateTimeFormat().resolvedOptions().timeZone` | page load |

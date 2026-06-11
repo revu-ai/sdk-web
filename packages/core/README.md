@@ -43,7 +43,7 @@ ESM only. Zero runtime dependencies. **21.3 kB minified / 6.9 kB gzipped.**
 | `$web_vital` | LCP, INP, CLS on terminal page lifecycle |
 | `$identify`, `$reset` | Identity transitions |
 
-Every event also carries environment context (`$user_agent`, viewport, language, timezone, referrer, UTM and click ids) so the server can break down by browser, locale, and campaign without host wiring.
+Every event also carries environment context (`$user_agent`, viewport, language, timezone, referrer) so the server can break down by browser and locale without host wiring, plus `$sdk_version` so the server knows which SDK build produced it. UTM and click-id landing attribution are derived server-side from the captured URL on the first `$pageview` of each session.
 
 Set `environment: "staging"` (or `"development"`) in `init()` to keep non-prod traffic out of the default dashboard view. The label is stamped on every event as `$environment`. Default is `"production"`.
 
@@ -82,6 +82,14 @@ Caller properties always win over engine values on collision, so the host can ov
 ## Safety
 
 Every public entry (`init`, `capture`, `identify`, `reset`, `flush`, `use`) is wrapped so internal errors are swallowed and (with `debug: true`) logged. The SDK never throws into the host page.
+
+## Build version
+
+`revu.version` returns the build string of the bundle (e.g. `"0.1.0"`). The same string lands on every event as `properties.$sdk_version` so the server can correlate behavior with SDK builds, and so support tickets always include the build the user is on.
+
+```js
+console.log(revu.version); // "0.1.0"
+```
 
 ## Transport and offline
 

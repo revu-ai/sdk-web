@@ -9,6 +9,7 @@ import { Capture } from "./capture.js";
 import { Context } from "./context.js";
 import { Identity } from "./identity.js";
 import { Transport } from "./transport.js";
+import { VERSION } from "./version.js";
 import { Vitals } from "./vitals.js";
 import { nowIso, routePath, uuid } from "./utils.js";
 
@@ -132,7 +133,14 @@ export class RevuClient {
       // Environment context first so caller-supplied properties
       // (capture(), capture-layer extras) win on collision: the host
       // always has the final word over what the SDK auto-populates.
-      properties: { ...this.context.build(), ...(data.properties || {}) },
+      // $sdk_version stamps the build that emitted this event so the
+      // server can correlate behavior with SDK versions when
+      // investigating regressions or rolling out fixes.
+      properties: {
+        ...this.context.build(),
+        $sdk_version: VERSION,
+        ...(data.properties || {}),
+      },
       device_time: nowIso(),
     };
     this.transport.enqueue(event);
