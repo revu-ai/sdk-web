@@ -5,26 +5,68 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>REVU Web SDK - example</title>
     <style>
-      body { font: 15px/1.5 system-ui, sans-serif; margin: 2rem; max-width: 720px; }
-      button, a { padding: .5rem 1rem; margin: .25rem; display: inline-block; }
-      #log { background: #0b0b0f; color: #b9a4ff; padding: 1rem; border-radius: 8px;
-             font: 12px/1.6 ui-monospace, monospace; max-height: 340px; overflow: auto; }
+      body { font: 15px/1.5 system-ui, sans-serif; margin: 2rem; max-width: 760px; }
+      h2 { margin-top: 1.75rem; }
+      button, a.link { padding: .5rem 1rem; margin: .25rem; display: inline-block; }
+      form { border: 1px solid #ddd; border-radius: 8px; padding: 1rem; margin-top: .5rem; }
+      form label { display: block; margin: .35rem 0; }
+      form input { padding: .35rem .5rem; min-width: 240px; }
       .row { color: #7fd1ff; }
+      .muted { color: #888; font-size: 13px; }
+      #log { background: #0b0b0f; color: #b9a4ff; padding: 1rem; border-radius: 8px;
+             font: 12px/1.6 ui-monospace, monospace; max-height: 360px; overflow: auto; }
+      #current-user { font-family: ui-monospace, monospace; color: #444; }
     </style>
   </head>
   <body>
     <h1>REVU Web SDK - local example</h1>
-    <p>Click around and change the route. Captured events stream below (and to the console).</p>
+    <p>Click around, change the route, fill out the form. Captured events stream below and to the console.</p>
 
+    <h2>Autocapture</h2>
+    <p class="muted">Every click is captured automatically. No code wiring required.</p>
     <button id="cta">Primary action</button>
     <button id="secondary" class="btn-secondary">Secondary</button>
-    <a href="#/pricing" id="pricing-link">Go to /pricing</a>
+    <a class="link" href="#/pricing" id="pricing-link">Go to /pricing (SPA route)</a>
+
+    <h2>Identity</h2>
+    <p class="muted">
+      The SDK auto-assigns a persistent <code>userId</code> on first visit. Call
+      <code>revu.identify(realId)</code> on login to replace it, <code>revu.reset()</code>
+      on logout to rotate. Both emit <code>$identify</code> / <code>$reset</code>.
+    </p>
+    <label>
+      User id <input id="user-id" type="text" placeholder="user-123" value="user-123" />
+    </label>
+    <button id="identify">Identify</button>
+    <button id="reset">Reset</button>
+    <p class="muted">Current user: <span id="current-user">(none)</span></p>
+
+    <h2>Form submit</h2>
+    <p class="muted">
+      Submits emit <code>$form_submit</code> with field <em>metadata only</em>:
+      <code>field_names</code>, <code>field_types</code>, <code>field_count</code>.
+      <strong>Values are never read.</strong> Add <code>data-revu-mask</code> to any element
+      to opt out of even the field names.
+    </p>
+    <form id="contact-form" onsubmit="event.preventDefault();">
+      <label>Name <input name="name" type="text" placeholder="Ada Lovelace" /></label>
+      <label>Email <input name="email" type="email" placeholder="ada@example.com" /></label>
+      <label>Company <input name="company" type="text" placeholder="REVU" /></label>
+      <button type="submit">Submit</button>
+    </form>
+
+    <h2>Outbound + download links</h2>
+    <p class="muted">
+      Links whose hostname differs from the page emit <code>$outbound_link</code>. Links with
+      a <code>download</code> attribute (or a known file extension) emit <code>$file_download</code>.
+    </p>
+    <a class="link" href="https://example.com" target="_blank" rel="noopener noreferrer" id="outbound">External link (example.com)</a>
+    <a class="link" href="#" download="sample.txt" id="download">Download sample.txt</a>
 
     <h2>Custom events</h2>
-    <p>
-      Most things are autocaptured. For domain-specific signals the page can't see
-      (a server-side payment completing, an async export, a wizard step), call
-      <code>revu.capture</code>:
+    <p class="muted">
+      For signals autocapture cannot see (a server-side completion, an async export, a wizard
+      step that does not change the URL), call <code>revu.capture(name, properties?)</code>.
     </p>
     <button id="checkout">Simulate checkout_completed</button>
     <button id="export">Simulate report_exported</button>
@@ -37,11 +79,12 @@
       import revu from "../../packages/core/src/index.js";
 
       const log = document.getElementById("log");
+      const currentUser = document.getElementById("current-user");
 
       // One line to start. `onEvent` is the public hook used here to mirror
-      // events onto the page (it's also how the debug overlay + tests subscribe).
-      // The api_key is a public, browser-embeddable write key (prefix
-      // revu_pk_). Replace "revu_pk_demo_replace_me" with your own key
+      // events onto the page (it's also how the debug overlay and tests
+      // subscribe). The api_key is a public, browser-embeddable write key
+      // (prefix revu_pk_). Replace "revu_pk_demo_replace_me" with your own
       // from the REVU dashboard. The default host points at the REVU API.
       revu.init({
         apiKey: "revu_pk_demo_replace_me",
@@ -50,9 +93,24 @@
         onEvent: (e) => {
           const line = document.createElement("div");
           line.className = "row";
-          line.textContent = `${e.event_type.padEnd(20)} ${e.screen}  ${e.fingerprint?.text ?? ""}`;
+          const detail = e.fingerprint?.text ?? e.properties?.path ?? e.properties?.url ?? "";
+          line.textContent = `${e.event_type.padEnd(20)} ${e.screen}  ${detail}`;
           log.prepend(line);
         },
+      });
+
+      // Identity demos. identify() replaces the auto-assigned userId with
+      // the host's real id; reset() rotates to a fresh auto id and emits
+      // $reset so the server can close the identified session.
+      document.getElementById("identify").addEventListener("click", () => {
+        const id = document.getElementById("user-id").value.trim();
+        if (!id) return;
+        revu.identify(id);
+        currentUser.textContent = id;
+      });
+      document.getElementById("reset").addEventListener("click", () => {
+        revu.reset();
+        currentUser.textContent = "(none)";
       });
 
       // Custom event demos. revu.capture(name, properties?) sends a named
