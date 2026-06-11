@@ -19,3 +19,6 @@ dist/
 # Local-only agent instructions (not public)
 AGENTS.md
 CLAUDE.md
+
+# Internal operations runbooks (not public)
+RELEASING.md
