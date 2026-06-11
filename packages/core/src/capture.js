@@ -156,10 +156,15 @@ export class Capture {
 
   /**
    * Handle a click anywhere in the document (delegated).
+   *
+   * Resolves the actual click target via `composedPath()[0]` so a click
+   * inside a Shadow DOM custom element is captured against the internal
+   * element, not the retargeted shadow host. Falls back to `e.target` on
+   * engines without composedPath.
    * @param {MouseEvent} e
    */
   onClick(e) {
-    const el = /** @type {Element|null} */ (e.target);
+    const el = /** @type {Element|null} */ (composedTarget(e));
     if (!el || el.nodeType !== 1) return;
     const fp = fingerprint(el);
 
@@ -178,7 +183,7 @@ export class Capture {
    * @param {MouseEvent} e
    */
   onContextMenu(e) {
-    const el = /** @type {Element|null} */ (e.target);
+    const el = /** @type {Element|null} */ (composedTarget(e));
     if (!el || el.nodeType !== 1) return;
     this.emit("$rightclick", {
       fingerprint: fingerprint(el),
@@ -400,6 +405,26 @@ export class Capture {
     this._pendingPersisted = undefined;
     this.emit("$page_leave", { properties });
   }
+}
+
+/**
+ * Resolve the actual element the user interacted with, even when the click
+ * originated inside a Shadow DOM tree. Engines retarget `event.target` to
+ * the shadow host when an event composes across the boundary, so a click on
+ * a button inside `<my-card>` arrives at the document-level listener as
+ * `target = <my-card>`. `composedPath()[0]` returns the true element clicked
+ * through the boundary. Falls back to `event.target` on engines without
+ * composedPath (older browsers, some test runners).
+ *
+ * @param {Event} e
+ * @returns {EventTarget|null}
+ */
+function composedTarget(e) {
+  if (typeof e.composedPath === "function") {
+    const path = e.composedPath();
+    if (path && path.length > 0 && path[0]) return path[0];
+  }
+  return e.target;
 }
 
 /**

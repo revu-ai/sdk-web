@@ -20,6 +20,34 @@
 import { truncate } from "./utils.js";
 
 /**
+ * Walk one level up the DOM, crossing Shadow DOM boundaries by jumping from
+ * a ShadowRoot to its host. Without this, every parent walk silently stops
+ * at the shadow boundary: a click inside a custom element sees only its
+ * shadow tree and loses every ancestor on the light side, including any
+ * `data-revu-mask` opt-in on the host.
+ *
+ * @param {Node|null} node
+ * @returns {Element|null}
+ */
+function parentAcrossShadow(node) {
+  if (!node) return null;
+  if (/** @type {Element} */ (node).parentElement) {
+    return /** @type {Element} */ (node).parentElement;
+  }
+  const parent = node.parentNode;
+  // nodeType 11 is DocumentFragment; ShadowRoot is a DocumentFragment with a
+  // `.host` property. Light-DOM DocumentFragments do not have a host.
+  if (
+    parent &&
+    parent.nodeType === 11 &&
+    /** @type {ShadowRoot} */ (parent).host
+  ) {
+    return /** @type {ShadowRoot} */ (parent).host;
+  }
+  return null;
+}
+
+/**
  * Build a fingerprint from a clicked element.
  *
  * Captures the visible text plus two accessibility labels - `aria-label` and
@@ -72,11 +100,13 @@ export function isSensitive(el) {
   const ce = el.getAttribute("contenteditable");
   if (ce !== null && ce !== "false") return true;
   // Ancestor walk for the opt-in marker; keeps the per-element check cheap.
+  // Crosses Shadow DOM boundaries so a `data-revu-mask` on the host applies
+  // to every element in its shadow tree.
   /** @type {Element|null} */
   let node = el;
   while (node && node.nodeType === 1) {
     if (node.hasAttribute("data-revu-mask")) return true;
-    node = node.parentElement;
+    node = parentAcrossShadow(node);
   }
   return false;
 }
@@ -130,7 +160,11 @@ function selectorOf(el) {
       parts[0] = `#${node.id}`;
       break;
     }
-    node = node.parentElement;
+    // Cross Shadow DOM boundaries so a button inside a custom element still
+    // gets the host in its selector path. Without this the selector
+    // truncates at the shadow root and unrelated buttons across components
+    // can collide on `button.primary`.
+    node = parentAcrossShadow(node);
     depth += 1;
   }
   return parts.join(" > ");

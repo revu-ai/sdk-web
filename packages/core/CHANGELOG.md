@@ -27,6 +27,7 @@ First public release. Lean capture core for web behavioral analytics: one-line i
 - **Environment context.** Every event carries `$user_agent`, viewport and screen dimensions, language, timezone, and referrer host stamped at capture time.
 - **Environment label.** `environment: "production" | "staging" | "development"` config field (default `"production"`) stamps `$environment` on every event so the dashboard can keep dev and staging traffic out of the production view. Invalid values throw at init.
 - **Input masking.** `data-revu-mask` attribute opts a subtree out of text-content capture; sensitive `<input>` types (`password`, `email`, `tel`, `credit-card`, `search`) are redacted at source. Form submits emit metadata only (`field_names`, `field_types`, `field_count`), never values.
+- **Shadow DOM coverage.** Clicks inside open Shadow DOM custom elements are captured against the actual internal element via `composedPath()` instead of the retargeted host. Ancestor walks in the fingerprint (selector path) and masking check (`data-revu-mask`) cross the shadow boundary via `ShadowRoot.host`, so a mask on the host applies to its shadow tree and selectors keep their full ancestor context across Web Components and component-library UIs.
 
 ### Architecture
 

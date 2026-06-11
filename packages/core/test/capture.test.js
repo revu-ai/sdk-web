@@ -810,3 +810,90 @@ describe("Capture - autocapture element semantics", () => {
   });
 });
 
+describe("Capture - Shadow DOM", () => {
+  /**
+   * Component-library apps that build with Web Components (Stencil, Lit, plain
+   * `customElements.define`) put their interactive elements inside Shadow DOM.
+   * A document-level listener sees the click retargeted to the shadow host,
+   * so without composedPath() resolution the SDK would capture the host
+   * instead of the actual button. The ancestor walk in the fingerprint also
+   * needs to cross the boundary so `data-revu-mask` on the host applies to
+   * every internal element.
+   */
+
+  test("captures a click on a button inside an open shadow root", () => {
+    const host = document.createElement("div");
+    host.id = "card-host";
+    document.body.appendChild(host);
+    const shadow = host.attachShadow({ mode: "open" });
+    const btn = document.createElement("button");
+    btn.id = "shadow-cta";
+    btn.textContent = "Inside shadow";
+    shadow.appendChild(btn);
+
+    const { cap, events } = makeCapture();
+    cap.start();
+    btn.click();
+
+    const auto = events.find((e) => e.type === "$autocapture");
+    expect(auto).toBeDefined();
+    const fp = auto.data.fingerprint;
+    // The actual button, not the retargeted host:
+    expect(fp.tag).toBe("button");
+    expect(fp.text).toBe("Inside shadow");
+    expect(fp.id).toBe("shadow-cta");
+    expect(fp.selector).toBe("#shadow-cta");
+  });
+
+  test("data-revu-mask on the shadow host masks clicks inside its shadow tree", () => {
+    const host = document.createElement("div");
+    host.setAttribute("data-revu-mask", "");
+    document.body.appendChild(host);
+    const shadow = host.attachShadow({ mode: "open" });
+    const btn = document.createElement("button");
+    btn.textContent = "Confidential";
+    shadow.appendChild(btn);
+
+    const { cap, events } = makeCapture();
+    cap.start();
+    btn.click();
+
+    const fp = events.find((e) => e.type === "$autocapture")?.data.fingerprint;
+    expect(fp).toBeDefined();
+    expect(fp.tag).toBe("button");
+    // Text and label fields are redacted because the host crossed the
+    // mask boundary on the parent walk.
+    expect(fp.text).toBeUndefined();
+    expect(fp.aria_label).toBeUndefined();
+    expect(fp.title).toBeUndefined();
+  });
+
+  test("selector path includes ancestors from across the shadow boundary", () => {
+    // No ids anywhere so the selector builder is forced to walk multiple
+    // ancestors and we can observe whether the host shows up in the path.
+    const host = document.createElement("article");
+    host.classList.add("card");
+    document.body.appendChild(host);
+    const shadow = host.attachShadow({ mode: "open" });
+    const wrap = document.createElement("section");
+    wrap.classList.add("body");
+    const btn = document.createElement("button");
+    btn.classList.add("primary");
+    btn.textContent = "Go";
+    wrap.appendChild(btn);
+    shadow.appendChild(wrap);
+
+    const { cap, events } = makeCapture();
+    cap.start();
+    btn.click();
+
+    const fp = events.find((e) => e.type === "$autocapture")?.data.fingerprint;
+    expect(fp).toBeDefined();
+    // The selector should at minimum include the immediate parent inside
+    // the shadow tree AND the host on the light side, joined as one path.
+    // Without the shadow-aware walk it would truncate at the shadow root.
+    expect(fp.selector).toContain("section.body");
+    expect(fp.selector).toContain("article.card");
+  });
+});
+
