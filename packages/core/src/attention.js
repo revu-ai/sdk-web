@@ -14,8 +14,7 @@
  *
  *   - Engagement clock: counts time the tab is visible. Pauses on
  *     visibilitychange to hidden, resumes on visible. Powers
- *     `$page_leave.engagement_time_ms`. Matches GA4 / PostHog / Mixpanel
- *     convention: engagement is visible time, period.
+ *     `$page_leave.engagement_time_ms`. Engagement is visible time, period.
  *   - Idle detection: tracks whether the user has interacted recently.
  *     Emits $idle / $active as behavioral signals; does NOT subtract from
  *     engagement. A page where the user reads silently for two minutes

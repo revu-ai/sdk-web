@@ -91,10 +91,9 @@ describe("Attention > engagement clock", () => {
   });
 
   test("keeps ticking while the user is idle (idle is a signal, not a clock pause)", async () => {
-    // Industry convention (GA4 / PostHog / Mixpanel) treats engagement as
-    // visible wall-clock time. Idle is emitted as a separate behavioral
-    // signal and does NOT subtract from engagement, otherwise a user who
-    // reads a long article silently would look unengaged.
+    // Engagement is visible wall-clock time. Idle is emitted as a separate
+    // behavioral signal and does NOT subtract from engagement, otherwise a
+    // user who reads a long article silently would look unengaged.
     const { attn } = makeAttention({ idleTimeoutMs: 15 });
     attn.start();
     await sleep(30); // exceeds the idle threshold; $idle should have fired

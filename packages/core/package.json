@@ -1,6 +1,6 @@
 {
   "name": "@revu-ai/core",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "REVU Web SDK - lean capture core (autocapture, identity, queue, transport). Vanilla JS + JSDoc.",
   "author": "Tarek Raafat",
   "license": "Apache-2.0",

@@ -4,9 +4,9 @@
  * Identity ids (anonymous, user) live in two stores by default:
  *
  *   - localStorage  - zero per-request bandwidth and a large quota; the
- *                     industry default for analytics SDKs. Vulnerable to
- *                     Safari ITP eviction (~7 days without user interaction)
- *                     and any explicit "Clear site data".
+ *                     common choice for browser-side persistence. Vulnerable
+ *                     to Safari ITP eviction (~7 days without user
+ *                     interaction) and any explicit "Clear site data".
  *   - first-party cookie - ships on every request to the host domain (small,
  *                     one UUID per cookie) but survives some Safari paths
  *                     that wipe localStorage. Can also span subdomains when

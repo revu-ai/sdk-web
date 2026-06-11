@@ -57,7 +57,7 @@ Out of the box, the SDK emits these without any host wiring (every event also ca
 | `$identify` / `$reset` | `revu.identify()` / `revu.reset()` | `previous_user_id` on transitions |
 | `$web_vital` | `pagehide` / `visibilitychange=hidden` | `name` ("LCP" / "INP" / "CLS"), `value`, `unit` |
 
-`$page_leave`'s `engagement_time_ms` is the wall-clock time the tab was visible on the current page. Hidden time is excluded; idle time is included (idle is emitted as a separate behavioral signal but does not subtract from engagement, matching GA4 / PostHog / Mixpanel conventions). Set `idleTimeoutMs: 0` to skip idle detection entirely, or `captureAttention: false` to keep the engagement clock but suppress the `$tab_*` / `$idle` / `$active` events.
+`$page_leave`'s `engagement_time_ms` is the wall-clock time the tab was visible on the current page. Hidden time is excluded; idle time is included: idle is emitted as a separate behavioral signal so a user reading silently for two minutes still records two minutes of engagement. Set `idleTimeoutMs: 0` to skip idle detection entirely, or `captureAttention: false` to keep the engagement clock but suppress the `$tab_*` / `$idle` / `$active` events.
 
 Form events respect `data-revu-mask`: a form (or any ancestor) carrying the attribute still emits `$form_submit` for the action / method / id metadata but omits `field_names`, `field_types`, and `field_count` entirely.
 
