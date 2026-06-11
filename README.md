@@ -185,6 +185,29 @@ bun run build         # bundle ESM to dist/
 bun run size          # check the bundle stays within budget
 ```
 
+## Releasing
+
+A release ships when a GitHub Release is published. The tag must match the package version; the workflow refuses to publish if they disagree.
+
+**One-time setup** (only needed before the first publish):
+
+1. Create an npm "automation" token with publish access to the `@revu-ai` org. (npm dashboard → Access Tokens → Generate → type "Automation".)
+2. Add it to this repo as the `NPM_TOKEN` secret. (`gh secret set NPM_TOKEN`, or repo Settings → Secrets and variables → Actions.)
+
+**To cut a release:**
+
+```bash
+# 1. Bump the package version, write the CHANGELOG entry, commit.
+#    (See packages/core/CHANGELOG.md for the format.)
+
+# 2. Tag and create a GitHub Release. Notes pull from CHANGELOG.md.
+gh release create v0.1.0 \
+  --title "v0.1.0" \
+  --notes-file packages/core/CHANGELOG.md
+```
+
+The `release` workflow then runs all CI gates against the tagged tree and publishes `@revu-ai/core` to npm with provenance. The provenance badge appears on the npm package page and links the published artifact to this commit and workflow run.
+
 ## License
 
 Apache-2.0 - see `LICENSE`. (The REVU backend is proprietary; the SDKs are open.)

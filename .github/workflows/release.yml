@@ -1,0 +1,88 @@
+name: release
+
+# Tag a GitHub Release (e.g. v0.1.0) to ship the corresponding
+# `@revu-ai/<package>@<version>` to npm with provenance attestation.
+#
+# Trigger: a published GitHub Release. The release tag must match the
+# package version (e.g. release tag `v0.1.0` requires `packages/core`
+# to declare version `0.1.0`). The job fails fast if they disagree.
+#
+# Prerequisites (one-time setup):
+#   - npm "automation" token with publish access to the @revu-ai org,
+#     added to this repo as the `NPM_TOKEN` secret.
+#   - Repository Actions enabled (already on).
+on:
+  release:
+    types: [published]
+
+# Provenance requires id-token to mint an OIDC token at publish time.
+# `contents: read` is the default; declared explicitly for clarity.
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  publish:
+    name: build, verify, publish to npm
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      # Node 20+ is required for `npm publish --provenance`. Bun handles
+      # everything else (install, test, build); we only invoke npm for the
+      # publish step itself.
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          registry-url: "https://registry.npmjs.org"
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      # Verify the release tag matches the package version. A tag of
+      # v0.1.0 and a package.json version of 0.1.0 is the only valid
+      # pairing; anything else means the wrong commit was tagged.
+      - name: Verify tag matches package version
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          pkg=$(node -p "require('./packages/core/package.json').version")
+          if [ "$tag" != "$pkg" ]; then
+            echo "::error::Release tag v$tag does not match @revu-ai/core version $pkg"
+            exit 1
+          fi
+          echo "Tag and package version match: $pkg"
+
+      # Re-run all CI gates as a final safety net. The same checks ran
+      # on push, but tag-time runs against the exact tagged tree, which
+      # is the right invariant for "what we publish is what we tested".
+      - name: Lint
+        run: bun run lint
+
+      - name: Type check
+        run: bun run types
+
+      - name: Test
+        run: bun test
+
+      - name: Build
+        run: bun run build
+
+      - name: Size budget
+        run: bun run size
+
+      # `--provenance` attaches a signed statement linking the published
+      # package to this workflow run and commit. The badge appears on the
+      # npm package page. `--access public` is required for the first
+      # publish of a scoped package; npm scopes default to private.
+      - name: Publish @revu-ai/core
+        working-directory: packages/core
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: npm publish --provenance --access public
