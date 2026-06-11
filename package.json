@@ -24,10 +24,10 @@
   },
   "devDependencies": {
     "@happy-dom/global-registrator": "^20.10.2",
-    "@size-limit/preset-small-lib": "^11",
-    "eslint": "^9",
-    "prettier": "^3",
-    "size-limit": "^11",
-    "typescript": "^5"
+    "@size-limit/preset-small-lib": "^12.1.0",
+    "eslint": "^10.4.1",
+    "prettier": "^3.8.4",
+    "size-limit": "^12.1.0",
+    "typescript": "^6.0.3"
   }
 }
