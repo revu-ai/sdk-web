@@ -2,17 +2,18 @@
  * @file Context - environment metadata attached to every event.
  *
  * The SDK ships only raw, lightweight signals; the server is responsible
- * for parsing the user agent into os / browser / device and for IP-based
- * geo enrichment. Keeping the parsing server-side is a hard requirement -
- * the alternative (a UA parser shipped to the client) would single-handedly
- * blow the size budget and lock the SDK to a dictionary that drifts as
- * browsers ship.
+ * for parsing the user agent into os / browser / device, IP-based geo
+ * enrichment, and URL-query attribution (UTM / click ids) from the
+ * captured `$pageview.properties.url`. Keeping the parsing server-side
+ * is a hard requirement - the alternative (parsers shipped to the
+ * client) would blow the size budget and lock the SDK to dictionaries
+ * that drift over time.
  *
  * Two layers:
  *
  *   - Session-scoped: built once on construction, the same values on every
  *     event until the page is reloaded. UA, language, timezone, screen,
- *     and the initial referrer / UTM are session-stable.
+ *     and the initial referrer are session-stable.
  *   - Per-event volatile: re-read on every record() call. Viewport size
  *     changes on resize, connection type can flip between cellular and
  *     wifi, online state toggles - so we sample at emission time rather
@@ -22,16 +23,6 @@
  * every engine-emitted property is `$`-prefixed so custom capture() properties
  * remain in their own namespace and never collide.
  */
-
-const UTM_KEYS = [
-  "utm_source",
-  "utm_medium",
-  "utm_campaign",
-  "utm_term",
-  "utm_content",
-  "gclid",
-  "fbclid",
-];
 
 /**
  * Build session-scoped context once, sample per-event context on every
@@ -95,10 +86,6 @@ export class Context {
       }
     }
 
-    if (typeof location !== "undefined" && location.search) {
-      Object.assign(ctx, readUtm(location.search));
-    }
-
     return ctx;
   }
 
@@ -146,25 +133,4 @@ export class Context {
   build() {
     return { ...this.session, ...this._forEvent() };
   }
-}
-
-/**
- * Extract the standard attribution params from a query string. Skips
- * absent keys entirely so the event payload stays compact.
- * @param {string} search
- * @returns {Record<string, string>}
- */
-function readUtm(search) {
-  /** @type {Record<string, string>} */
-  const out = {};
-  try {
-    const params = new URLSearchParams(search);
-    for (const key of UTM_KEYS) {
-      const value = params.get(key);
-      if (value) out["$" + key] = value;
-    }
-  } catch {
-    // Malformed search string.
-  }
-  return out;
 }

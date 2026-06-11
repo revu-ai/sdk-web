@@ -1,6 +1,6 @@
 /**
  * @file Tests for the Context layer - the per-event environment metadata
- * (UA, screen, viewport, language, timezone, referrer, UTM, connectivity).
+ * (UA, screen, viewport, language, timezone, referrer, connectivity).
  *
  * Tests run under happy-dom, so navigator / window / Intl all return real
  * (synthetic) values. Where the real value is not deterministic enough to
@@ -14,8 +14,8 @@ const ORIGINAL_HREF = location.href;
 
 afterEach(() => {
   // Several tests below rewrite the URL via history.replaceState to seed
-  // UTM / search-string fixtures. Put it back so the suite stays
-  // independent of run order.
+  // search-string fixtures. Put it back so the suite stays independent
+  // of run order.
   history.replaceState({}, "", ORIGINAL_HREF);
 });
 
@@ -50,42 +50,26 @@ describe("Context > session-scoped fields", () => {
   });
 });
 
-describe("Context > UTM and click ids", () => {
-  test("extracts the standard UTM keys from the URL", () => {
+describe("Context > URL query is not parsed on the SDK", () => {
+  // UTM and click-id derivation lives on the server, which parses them
+  // from `$pageview.properties.url` and writes the result to the visitor
+  // rollup's landing columns. The SDK only captures the raw URL on the
+  // pageview (set in capture.js); the per-event Context layer must not
+  // stamp any `$utm_*` / `$gclid` / `$fbclid` properties.
+  test("does not stamp $utm_* or click-id properties on the context", () => {
     history.replaceState(
       {},
       "",
-      "/?utm_source=google&utm_medium=cpc&utm_campaign=summer&utm_term=shoes&utm_content=hero",
+      "/?utm_source=google&utm_medium=cpc&utm_campaign=summer&gclid=abc123&fbclid=xyz789",
     );
     const ctx = new Context().build();
-    expect(ctx.$utm_source).toBe("google");
-    expect(ctx.$utm_medium).toBe("cpc");
-    expect(ctx.$utm_campaign).toBe("summer");
-    expect(ctx.$utm_term).toBe("shoes");
-    expect(ctx.$utm_content).toBe("hero");
-  });
-
-  test("extracts gclid and fbclid when present", () => {
-    history.replaceState({}, "", "/?gclid=abc123&fbclid=xyz789");
-    const ctx = new Context().build();
-    expect(ctx.$gclid).toBe("abc123");
-    expect(ctx.$fbclid).toBe("xyz789");
-  });
-
-  test("absent UTM keys are not in the payload (no empty strings)", () => {
-    history.replaceState({}, "", "/?other=ignored");
-    const ctx = new Context().build();
     expect(ctx.$utm_source).toBeUndefined();
+    expect(ctx.$utm_medium).toBeUndefined();
+    expect(ctx.$utm_campaign).toBeUndefined();
+    expect(ctx.$utm_term).toBeUndefined();
+    expect(ctx.$utm_content).toBeUndefined();
     expect(ctx.$gclid).toBeUndefined();
-  });
-
-  test("a session-scoped UTM persists even after the URL changes mid-session", () => {
-    history.replaceState({}, "", "/?utm_source=google");
-    const c = new Context();
-    history.replaceState({}, "", "/about"); // simulate SPA navigation
-    // The UTM landed on the FIRST page; subsequent SPA pages still get
-    // attributed to it because session context is built once.
-    expect(c.build().$utm_source).toBe("google");
+    expect(ctx.$fbclid).toBeUndefined();
   });
 });
 
