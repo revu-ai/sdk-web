@@ -37,7 +37,7 @@
   "scripts": {
     "sync-version": "bun scripts/sync-version.js",
     "prebuild": "bun scripts/sync-version.js",
-    "build": "bun build ./src/index.js --outdir ./dist --format esm --target browser --sourcemap=linked",
+    "build": "bun build ./src/index.js --outdir ./dist --format esm --target browser --sourcemap=linked --minify",
     "types": "tsc -p tsconfig.json --outDir dist",
     "size": "size-limit"
   },
