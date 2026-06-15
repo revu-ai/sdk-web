@@ -170,7 +170,13 @@ describe("Transport", () => {
     expect(t.queue.size()).toBe(0);
     const [url, body] = sendBeacon.mock.calls[0];
     expect(url).toBe("https://api.test/v1/behavior/events");
-    const parsed = JSON.parse(/** @type {string} */ (body));
+    // sendBeacon receives a Blob (not a string) so the request goes out
+    // with `Content-Type: application/json`; with a raw string body the
+    // browser defaults to `text/plain;charset=UTF-8`, which the ingest
+    // endpoint rejects.
+    expect(body).toBeInstanceOf(Blob);
+    expect(/** @type {Blob} */ (body).type).toBe("application/json");
+    const parsed = JSON.parse(await /** @type {Blob} */ (body).text());
     expect(parsed.batch).toHaveLength(1);
   });
 

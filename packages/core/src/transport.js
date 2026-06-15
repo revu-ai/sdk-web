@@ -140,8 +140,13 @@ export class Transport {
 }
 
 /**
- * `sendBeacon` can throw in some browsers (e.g. blocked by a CSP connect-src);
- * wrap it so a failure never propagates into the unloading host page.
+ * `sendBeacon` defaults a string body to `Content-Type: text/plain;
+ * charset=UTF-8`, which the ingest endpoint rejects (it only parses
+ * `application/json` bodies). Wrap the body in a Blob with the right
+ * type so the terminal pagehide flush actually reaches the server.
+ *
+ * Also wraps the call so a failure (e.g. CSP connect-src block) never
+ * propagates into the unloading host page.
  * @param {Navigator} nav
  * @param {string} url
  * @param {string} body
@@ -149,7 +154,8 @@ export class Transport {
  */
 function safeBeacon(nav, url, body) {
   try {
-    return nav.sendBeacon(url, body);
+    const blob = new Blob([body], { type: "application/json" });
+    return nav.sendBeacon(url, blob);
   } catch {
     return false;
   }
