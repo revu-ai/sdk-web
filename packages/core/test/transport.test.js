@@ -343,4 +343,78 @@ describe("Transport", () => {
     expect(t.queue.size()).toBe(0);
     clearInterval(t.timer ?? undefined);
   });
+
+  test("installPageHideFlush() also flushes on 'visibilitychange -> hidden' (iOS Safari)", async () => {
+    const sendBeacon = mock(() => true);
+    /** @type {any} */ (navigator).sendBeacon = sendBeacon;
+    const fetchMock = mockFetch(() =>
+      Promise.resolve(new Response("", { status: 200 })),
+    );
+
+    const { t } = makeTransport();
+    t.start();
+    t.installPageHideFlush();
+    t.enqueue(makeEvent(1));
+
+    // iOS Safari often skips `pagehide` on tab close / app background;
+    // `visibilitychange -> hidden` is the only reliable terminal signal there.
+    // Without flushing on this event, the queued events stay stranded in
+    // localStorage forever (until the user opens the page again).
+    Object.defineProperty(document, "visibilityState", { value: "hidden", configurable: true });
+    document.dispatchEvent(new Event("visibilitychange"));
+    await tick();
+
+    expect(sendBeacon).toHaveBeenCalledTimes(1);
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(t.queue.size()).toBe(0);
+    clearInterval(t.timer ?? undefined);
+  });
+
+  test("terminal signal yields when a normal fetch is mid-flight (no queue corruption)", async () => {
+    // Race we are guarding against: a normal `flush(false)` is mid-fetch
+    // when the terminal signal fires. Without the `!this.sending` gate,
+    // `flush(true)` would peek the SAME batch the fetch is sending,
+    // sendBeacon-deliver it (committing N events), then the fetch returns
+    // and commits another N, dropping events [N+1..2N] from the queue
+    // without sending them. The gate makes the terminal flush yield to
+    // the in-flight fetch; keepalive carries the fetch even after hide.
+    const sendBeacon = mock(() => true);
+    /** @type {any} */ (navigator).sendBeacon = sendBeacon;
+    // Hold the fetch resolver so we can fire the terminal signal while
+    // sending=true and observe the gating behaviour.
+    /** @type {(v: Response) => void} */
+    let resolveFetch;
+    const fetchMock = mockFetch(
+      () =>
+        new Promise((resolve) => {
+          resolveFetch = resolve;
+        }),
+    );
+
+    const { t } = makeTransport();
+    t.start();
+    t.installPageHideFlush();
+    t.enqueue(makeEvent(1));
+    t.enqueue(makeEvent(2));
+
+    // Trigger a normal flush; do not await so the fetch stays pending.
+    const flushing = t.flush();
+    await tick();
+    expect(t.sending).toBe(true);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    // Terminal signal during the in-flight fetch: must NOT take the beacon
+    // path, because that would double-commit the queue.
+    window.dispatchEvent(new Event("pagehide"));
+    Object.defineProperty(document, "visibilityState", { value: "hidden", configurable: true });
+    document.dispatchEvent(new Event("visibilitychange"));
+    await tick();
+    expect(sendBeacon).not.toHaveBeenCalled();
+
+    // Now let the fetch complete; it commits exactly the two events it sent.
+    resolveFetch(new Response("", { status: 200 }));
+    await flushing;
+    expect(t.queue.size()).toBe(0);
+    clearInterval(t.timer ?? undefined);
+  });
 });

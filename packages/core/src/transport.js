@@ -70,18 +70,48 @@ export class Transport {
   }
 
   /**
-   * Install the terminal pagehide flush. Call this LAST in the SDK boot
-   * sequence so it runs after every emit-on-pagehide module (autocapture's
-   * `$page_leave`, vitals' CLS/INP report, ...) has registered its own
-   * pagehide listener. Listeners on the same target fire in registration
-   * order during the bubble phase, so installing last guarantees the
-   * transport's flush sees those final events in its queue. The listener
-   * is intentionally bubble-phase: a capture-phase listener would run
-   * BEFORE the at-target bubble listeners and miss the same events.
+   * Install the terminal flush. Call this LAST in the SDK boot sequence so it
+   * runs after every emit-on-terminal module (autocapture's `$page_leave`,
+   * vitals' CLS / INP report, ...) has registered its own listener. Listeners
+   * on the same target fire in registration order during the bubble phase, so
+   * installing last guarantees the transport's flush sees those final events
+   * in its queue. Both listeners are bubble-phase: a capture-phase listener
+   * would run BEFORE the at-target bubble listeners and miss the same events.
+   *
+   * Two events drive the flush, because no single one is reliable everywhere:
+   *
+   *   - `pagehide` is the most accurate desktop terminal signal (covers tab
+   *     close, navigation, bfcache eviction).
+   *   - `visibilitychange -> hidden` is the only reliable terminal signal on
+   *     iOS Safari (closing the tab, backgrounding the app, locking the
+   *     screen). `pagehide` is often skipped there before the page is killed,
+   *     so a queue-only-on-pagehide design strands `$page_leave` in
+   *     localStorage forever (until the user opens the page again).
+   *
+   * Both branches gate on `!this.sending` to prevent a queue-corrupting race:
+   * if a normal `flush(false)` is mid-fetch and the terminal signal fires,
+   * `flush(true)` would otherwise peek the SAME batch the fetch is sending,
+   * sendBeacon-deliver it (committing N events), then the fetch returns and
+   * commits N events again, dropping events `[N+1..2N]` from the queue
+   * without sending them. Yielding to the in-flight fetch avoids that. The
+   * fetch is fired with `keepalive: true` so the browser still delivers it
+   * after the page hides; if the OS kills the process before completion
+   * (rare), the events remain durably queued and ship on next open. When
+   * both `pagehide` and `visibilitychange -> hidden` fire (desktop close),
+   * the second invocation finds an empty queue and short-circuits via the
+   * size check in `flush()`, so no duplicate delivery.
    */
   installPageHideFlush() {
     if (typeof addEventListener !== "function") return;
-    addEventListener("pagehide", () => this.flush(true));
+    const terminate = () => {
+      if (!this.sending) this.flush(true);
+    };
+    addEventListener("pagehide", terminate);
+    if (typeof document !== "undefined") {
+      document.addEventListener("visibilitychange", () => {
+        if (document.visibilityState === "hidden") terminate();
+      });
+    }
   }
 
   /**

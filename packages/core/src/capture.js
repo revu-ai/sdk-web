@@ -69,6 +69,8 @@ export class Capture {
     this._scrollThrottled = false;
     /** @type {boolean|undefined} pagehide.persisted, ferried into the next $page_leave. */
     this._pendingPersisted = undefined;
+    /** @type {boolean} True when $page_leave has been emitted for the current path. */
+    this._pageLeaveEmitted = false;
   }
 
   /** Wire up listeners and emit the initial page view. */
@@ -87,9 +89,23 @@ export class Capture {
     if (typeof window !== "undefined") {
       window.addEventListener("scroll", () => this.onScroll(), { passive: true });
       window.addEventListener("resize", () => this.onResize());
-      // `pagehide` is the cross-browser reliable terminal signal (handles bfcache,
-      // tab close, navigation away). `beforeunload` is unreliable on mobile.
+      // Terminal signal for $page_leave. We listen on BOTH `pagehide` and
+      // `visibilitychange -> hidden` and dedupe, because:
+      //   - On desktop, `pagehide` fires reliably on tab close / navigation.
+      //   - On mobile (especially iOS Safari), `pagehide` is often skipped
+      //     when the user backgrounds the app or closes the tab; the only
+      //     reliable terminal signal there is `visibilitychange` to hidden.
+      // `beforeunload` is intentionally not used (blocked on iOS Safari,
+      // unreliable on mobile generally). The `_pageLeaveEmitted` flag is
+      // reset on `visibilitychange -> visible` so a foregrounded page that
+      // navigates again later still emits the next $page_leave correctly.
       window.addEventListener("pagehide", (e) => this.onPageHide(e));
+      if (typeof document !== "undefined") {
+        document.addEventListener("visibilitychange", () => {
+          if (document.visibilityState === "hidden") this.onPageHide();
+          else if (document.visibilityState === "visible") this._pageLeaveEmitted = false;
+        });
+      }
       this._lastViewport = {
         w: typeof window.innerWidth === "number" ? window.innerWidth : 0,
         h: typeof window.innerHeight === "number" ? window.innerHeight : 0,
@@ -115,6 +131,10 @@ export class Capture {
     this.lastPath = newPath;
     this._scrollFired = new Set();
     this._recentClicks = [];
+    // Re-arm $page_leave for the new path: an SPA navigation closes out the
+    // previous page (handled above) and starts a fresh one, which must be
+    // eligible to emit its own $page_leave on the next terminal signal.
+    this._pageLeaveEmitted = false;
 
     this.emit("$pageview", {
       properties: {
@@ -367,10 +387,17 @@ export class Capture {
   // -------------------------------------------------------------------------
 
   /**
-   * Pre-unload signal. Emits the $page_leave for the current page so the
-   * dashboard sees engagement time even when the user closes the tab. We
-   * deliberately do this on `pagehide`, not `beforeunload`: the latter is
-   * blocked on iOS Safari and unreliable on mobile generally.
+   * Terminal signal for the current page. Emits `$page_leave` so the
+   * dashboard records engagement time even when the user closes the tab
+   * or backgrounds the mobile browser.
+   *
+   * Wired to two browser events for cross-platform reliability: `pagehide`
+   * (desktop, navigation, bfcache) and `visibilitychange -> hidden` (the
+   * only reliable terminal signal on iOS Safari). Idempotent so the two
+   * events firing in sequence on the same close do not emit two
+   * `$page_leave` events. `_pageLeaveEmitted` is reset on
+   * `visibilitychange -> visible` (page returns to foreground) and on SPA
+   * navigation, so subsequent terminal events fire correctly.
    *
    * `pagehide.persisted` is forwarded so the dashboard can distinguish a
    * terminal close ("user is gone") from a bfcache-eligible navigation
@@ -380,9 +407,11 @@ export class Capture {
    * @param {PageTransitionEvent} [event]
    */
   onPageHide(event) {
+    if (this._pageLeaveEmitted) return;
     this._pendingPersisted =
       event && typeof event.persisted === "boolean" ? event.persisted : false;
     this._emitPageLeave(this.lastPath);
+    this._pageLeaveEmitted = true;
   }
 
   /**

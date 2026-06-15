@@ -634,6 +634,53 @@ describe("Capture - page leave + engagement time", () => {
     const leave = events.find((ev) => ev.type === "$page_leave");
     expect(leave?.data.properties.persisted).toBe(true);
   });
+
+  test("visibilitychange to hidden emits $page_leave (iOS Safari terminal signal)", () => {
+    const { cap, events } = makeCapture();
+    cap.start();
+    events.length = 0;
+    // iOS Safari often skips `pagehide` on tab close / app background; the
+    // only reliable terminal signal there is `visibilitychange` to hidden.
+    Object.defineProperty(document, "visibilityState", { value: "hidden", configurable: true });
+    document.dispatchEvent(new Event("visibilitychange"));
+
+    const leave = events.find((e) => e.type === "$page_leave");
+    expect(leave).toBeDefined();
+    expect(leave?.data.properties.path).toBe("/");
+  });
+
+  test("$page_leave is emitted once when both pagehide and visibilitychange fire", () => {
+    const { cap, events } = makeCapture();
+    cap.start();
+    events.length = 0;
+    // Desktop close fires `visibilitychange -> hidden` followed by
+    // `pagehide`. Both wire to onPageHide; the dedup flag must keep
+    // `$page_leave` from emitting twice for the same terminal event.
+    Object.defineProperty(document, "visibilityState", { value: "hidden", configurable: true });
+    document.dispatchEvent(new Event("visibilitychange"));
+    window.dispatchEvent(new Event("pagehide"));
+
+    const leaves = events.filter((e) => e.type === "$page_leave");
+    expect(leaves).toHaveLength(1);
+  });
+
+  test("returning to foreground re-arms $page_leave for the next terminal event", () => {
+    const { cap, events } = makeCapture();
+    cap.start();
+    events.length = 0;
+    // First terminal signal: page hidden, $page_leave emits.
+    Object.defineProperty(document, "visibilityState", { value: "hidden", configurable: true });
+    document.dispatchEvent(new Event("visibilitychange"));
+    // User returns to the tab; the dedup flag must reset so the NEXT
+    // hide-or-close still emits a $page_leave.
+    Object.defineProperty(document, "visibilityState", { value: "visible", configurable: true });
+    document.dispatchEvent(new Event("visibilitychange"));
+    Object.defineProperty(document, "visibilityState", { value: "hidden", configurable: true });
+    document.dispatchEvent(new Event("visibilitychange"));
+
+    const leaves = events.filter((e) => e.type === "$page_leave");
+    expect(leaves).toHaveLength(2);
+  });
 });
 
 describe("Capture - autocapture element semantics", () => {
