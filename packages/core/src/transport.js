@@ -46,16 +46,18 @@ export class Transport {
   }
 
   /**
-   * Start the periodic flush, connectivity, and page-hide handlers, and drain
-   * any events left over from a previous session. No-op outside a browser
-   * (SSR-safe).
+   * Start the periodic flush + connectivity handlers, and drain any events
+   * left over from a previous session. The terminal pagehide flush is
+   * installed separately via `installPageHideFlush()` so the client can wire
+   * it AFTER the emit-on-pagehide modules (autocapture, vitals, ...). If we
+   * registered it here, the transport would flush before those modules
+   * enqueued their final events (`$page_leave`, web vitals), and that final
+   * batch would be dropped on tab close. No-op outside a browser (SSR-safe).
    */
   start() {
     if (typeof window === "undefined") return;
     this.timer = setInterval(() => this.flush(), this.options.flushIntervalMs);
     if (typeof addEventListener === "function") {
-      // `pagehide` is the reliable "page going away" signal across browsers.
-      addEventListener("pagehide", () => this.flush(true), { capture: true });
       // Retry the moment connectivity returns.
       addEventListener("online", () => {
         this.failures = 0;
@@ -65,6 +67,21 @@ export class Transport {
     }
     // Flush events persisted by a previous session.
     if (this.queue.size() > 0) this.flush();
+  }
+
+  /**
+   * Install the terminal pagehide flush. Call this LAST in the SDK boot
+   * sequence so it runs after every emit-on-pagehide module (autocapture's
+   * `$page_leave`, vitals' CLS/INP report, ...) has registered its own
+   * pagehide listener. Listeners on the same target fire in registration
+   * order during the bubble phase, so installing last guarantees the
+   * transport's flush sees those final events in its queue. The listener
+   * is intentionally bubble-phase: a capture-phase listener would run
+   * BEFORE the at-target bubble listeners and miss the same events.
+   */
+  installPageHideFlush() {
+    if (typeof addEventListener !== "function") return;
+    addEventListener("pagehide", () => this.flush(true));
   }
 
   /**

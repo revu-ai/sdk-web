@@ -73,6 +73,13 @@ export class RevuClient {
     for (const plugin of this._plugins) {
       if (!this._installed.has(plugin.name)) this._installPlugin(plugin);
     }
+    // Install the terminal pagehide flush LAST so it runs after every
+    // emit-on-pagehide listener registered above (autocapture's
+    // `$page_leave`, vitals' CLS / INP report, any plugin doing the same).
+    // pagehide listeners on the same target fire in registration order, so
+    // installing this one last guarantees the transport sees those final
+    // events in the queue before it flushes.
+    this.transport.installPageHideFlush();
     this._started = true;
   }
 

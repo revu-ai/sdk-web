@@ -314,7 +314,7 @@ describe("Transport", () => {
     expect(t.queue.size()).toBe(0);
   });
 
-  test("start() wires a 'pagehide' listener that flushes via sendBeacon", async () => {
+  test("installPageHideFlush() wires a 'pagehide' listener that flushes via sendBeacon", async () => {
     const sendBeacon = mock(() => true);
     /** @type {any} */ (navigator).sendBeacon = sendBeacon;
     const fetchMock = mockFetch(() =>
@@ -324,8 +324,13 @@ describe("Transport", () => {
     const { t } = makeTransport();
     // Wire listeners FIRST while the queue is empty: start() flushes on its
     // own when there is leftover data, which would otherwise take the fetch
-    // path and confuse the "fetch must not be called" assertion below.
+    // path and confuse the "fetch must not be called" assertion below. The
+    // pagehide listener is installed via installPageHideFlush() so the
+    // client can wire it AFTER the emit-on-pagehide modules (autocapture,
+    // vitals) - registration-order guarantees those modules' final events
+    // are in the queue before this listener flushes.
     t.start();
+    t.installPageHideFlush();
     t.enqueue(makeEvent(1));
 
     window.dispatchEvent(new Event("pagehide"));
