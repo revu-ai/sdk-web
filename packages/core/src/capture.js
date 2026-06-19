@@ -182,8 +182,8 @@ export class Capture {
    * @param {MouseEvent} e
    */
   onClick(e) {
-    const el = /** @type {Element|null} */ (composedTarget(e));
-    if (!el || el.nodeType !== 1) return;
+    const el = composedElement(e);
+    if (!el) return;
     const fp = fingerprint(el);
 
     this.emit("$autocapture", {
@@ -201,8 +201,8 @@ export class Capture {
    * @param {MouseEvent} e
    */
   onContextMenu(e) {
-    const el = /** @type {Element|null} */ (composedTarget(e));
-    if (!el || el.nodeType !== 1) return;
+    const el = composedElement(e);
+    if (!el) return;
     this.emit("$rightclick", {
       fingerprint: fingerprint(el),
       properties: { path: routePath() },
@@ -452,6 +452,21 @@ function composedTarget(e) {
     if (path && path.length > 0 && path[0]) return path[0];
   }
   return e.target;
+}
+
+/**
+ * Resolve an event to the {@link Element} the user interacted with, or null
+ * when the target is not an element node (text node, document, detached).
+ * Wraps {@link composedTarget} with the element-node guard shared by every
+ * delegated handler (click, contextmenu, change) so the "what counts as an
+ * interactable target" rule lives in one place.
+ *
+ * @param {Event} e
+ * @returns {Element|null}
+ */
+function composedElement(e) {
+  const t = composedTarget(e);
+  return t && /** @type {Node} */ (t).nodeType === 1 ? /** @type {Element} */ (t) : null;
 }
 
 /**
