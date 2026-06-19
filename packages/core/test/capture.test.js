@@ -683,6 +683,208 @@ describe("Capture - page leave + engagement time", () => {
   });
 });
 
+describe("Capture - $change on form controls", () => {
+  /**
+   * The semantic gap between `$autocapture` (a click on a control) and
+   * `$form_submit` (the whole form submitted) is the user's mid-form
+   * preferences: which plan they picked, which checkbox they toggled,
+   * which option they chose. `$change` closes that gap. The contract is
+   * strict: capture the interaction, never the entered value.
+   */
+
+  function fireChange(/** @type {Element} */ el) {
+    el.dispatchEvent(new Event("change", { bubbles: true }));
+  }
+
+  test("select change emits $change with control_type=select and no value", () => {
+    const sel = document.createElement("select");
+    sel.id = "plan";
+    const a = document.createElement("option");
+    a.value = "sentinel-starter-xyz"; a.textContent = "Starter Tier Label";
+    const b = document.createElement("option");
+    b.value = "sentinel-pro-xyz"; b.textContent = "Pro Tier Label";
+    sel.appendChild(a); sel.appendChild(b);
+    document.body.appendChild(sel);
+
+    const { cap, events } = makeCapture();
+    cap.start();
+    events.length = 0;
+    sel.value = "sentinel-pro-xyz";
+    fireChange(sel);
+
+    const change = events.find((e) => e.type === "$change");
+    expect(change).toBeDefined();
+    expect(change?.data.properties.control_type).toBe("select");
+    expect(change?.data.properties.path).toBe("/");
+    expect(change?.data.fingerprint).toBeDefined();
+    // Redact-at-source: the picked value and option label must not appear
+    // anywhere in the event. Unique sentinels avoid collisions with
+    // structural strings like "properties" or "control_type".
+    const json = JSON.stringify(change?.data);
+    expect(json).not.toContain("sentinel-pro-xyz");
+    expect(json).not.toContain("Pro Tier Label");
+  });
+
+  test("checkbox toggle emits $change with checked=true and control_type=checkbox", () => {
+    const cb = /** @type {HTMLInputElement} */ (document.createElement("input"));
+    cb.type = "checkbox";
+    cb.id = "agree";
+    document.body.appendChild(cb);
+
+    const { cap, events } = makeCapture();
+    cap.start();
+    events.length = 0;
+    cb.checked = true;
+    fireChange(cb);
+
+    const change = events.find((e) => e.type === "$change");
+    expect(change?.data.properties.control_type).toBe("checkbox");
+    expect(change?.data.properties.checked).toBe(true);
+  });
+
+  test("radio selection emits $change with checked=true and control_type=radio", () => {
+    const r = /** @type {HTMLInputElement} */ (document.createElement("input"));
+    r.type = "radio";
+    r.name = "tier";
+    r.value = "sentinel-radio-value-zzz";
+    document.body.appendChild(r);
+
+    const { cap, events } = makeCapture();
+    cap.start();
+    events.length = 0;
+    r.checked = true;
+    fireChange(r);
+
+    const change = events.find((e) => e.type === "$change");
+    expect(change?.data.properties.control_type).toBe("radio");
+    expect(change?.data.properties.checked).toBe(true);
+    // The radio's `value` must not leak in any field.
+    expect(JSON.stringify(change?.data)).not.toContain("sentinel-radio-value-zzz");
+  });
+
+  test("text input change emits $change with control_type=text and never the value", () => {
+    const inp = /** @type {HTMLInputElement} */ (document.createElement("input"));
+    inp.type = "text";
+    inp.id = "email-like";
+    document.body.appendChild(inp);
+
+    const { cap, events } = makeCapture();
+    cap.start();
+    events.length = 0;
+    inp.value = "secret-value-12345";
+    fireChange(inp);
+
+    const change = events.find((e) => e.type === "$change");
+    expect(change?.data.properties.control_type).toBe("text");
+    expect(JSON.stringify(change?.data)).not.toContain("secret-value-12345");
+  });
+
+  test("password input change is NEVER captured (defense in depth)", () => {
+    const inp = /** @type {HTMLInputElement} */ (document.createElement("input"));
+    inp.type = "password";
+    document.body.appendChild(inp);
+
+    const { cap, events } = makeCapture();
+    cap.start();
+    events.length = 0;
+    inp.value = "hunter2";
+    fireChange(inp);
+
+    expect(events.find((e) => e.type === "$change")).toBeUndefined();
+  });
+
+  test("file input change is NEVER captured (file name would leak)", () => {
+    const inp = /** @type {HTMLInputElement} */ (document.createElement("input"));
+    inp.type = "file";
+    document.body.appendChild(inp);
+
+    const { cap, events } = makeCapture();
+    cap.start();
+    events.length = 0;
+    fireChange(inp);
+
+    expect(events.find((e) => e.type === "$change")).toBeUndefined();
+  });
+
+  test("hidden input change is NEVER captured", () => {
+    const inp = /** @type {HTMLInputElement} */ (document.createElement("input"));
+    inp.type = "hidden";
+    inp.value = "csrf-token";
+    document.body.appendChild(inp);
+
+    const { cap, events } = makeCapture();
+    cap.start();
+    events.length = 0;
+    fireChange(inp);
+
+    expect(events.find((e) => e.type === "$change")).toBeUndefined();
+  });
+
+  test("checkbox inside a data-revu-mask region emits $change but withholds checked", () => {
+    // The mask opts a sensitive form out of having the user's actual answer
+    // reported. The interaction still counts (a control changed) but the
+    // `checked` boolean (the literal yes/no) must not ride along, mirroring
+    // how $form_submit drops field detail for masked forms.
+    const wrap = document.createElement("div");
+    wrap.setAttribute("data-revu-mask", "");
+    const cb = /** @type {HTMLInputElement} */ (document.createElement("input"));
+    cb.type = "checkbox";
+    cb.id = "sensitive-consent";
+    wrap.appendChild(cb);
+    document.body.appendChild(wrap);
+
+    const { cap, events } = makeCapture();
+    cap.start();
+    events.length = 0;
+    cb.checked = true;
+    fireChange(cb);
+
+    const change = events.find((e) => e.type === "$change");
+    expect(change).toBeDefined();
+    // Structural metadata still flows (it is already in the fingerprint).
+    expect(change?.data.properties.control_type).toBe("checkbox");
+    // The user's actual answer must not be reported for a masked control.
+    expect(change?.data.properties.checked).toBeUndefined();
+  });
+
+  test("data-revu-mask on a shadow host withholds checked for a control inside its shadow tree", () => {
+    // The mask check must cross the Shadow DOM boundary, exactly like the
+    // click-fingerprint redaction does, so a `data-revu-mask` on a custom-
+    // element host protects controls rendered inside its shadow root.
+    const host = document.createElement("div");
+    host.setAttribute("data-revu-mask", "");
+    document.body.appendChild(host);
+    const shadow = host.attachShadow({ mode: "open" });
+    const cb = /** @type {HTMLInputElement} */ (document.createElement("input"));
+    cb.type = "checkbox";
+    shadow.appendChild(cb);
+
+    const { cap, events } = makeCapture();
+    cap.start();
+    events.length = 0;
+    cb.checked = true;
+    cb.dispatchEvent(new Event("change", { bubbles: true, composed: true }));
+
+    const change = events.find((e) => e.type === "$change");
+    expect(change).toBeDefined();
+    expect(change?.data.properties.control_type).toBe("checkbox");
+    // Would leak if the mask walk stopped at the shadow boundary.
+    expect(change?.data.properties.checked).toBeUndefined();
+  });
+
+  test("change on a non-form element does not emit", () => {
+    const div = document.createElement("div");
+    document.body.appendChild(div);
+
+    const { cap, events } = makeCapture();
+    cap.start();
+    events.length = 0;
+    fireChange(div);
+
+    expect(events.find((e) => e.type === "$change")).toBeUndefined();
+  });
+});
+
 describe("Capture - autocapture element semantics", () => {
   /**
    * The fingerprint shipped with every $autocapture click is the only thing

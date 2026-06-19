@@ -83,6 +83,7 @@ export class Capture {
     document.addEventListener("click", (e) => this.onClick(e), { capture: true });
     document.addEventListener("contextmenu", (e) => this.onContextMenu(e), { capture: true });
     document.addEventListener("submit", (e) => this.onSubmit(e), { capture: true });
+    document.addEventListener("change", (e) => this.onChange(e), { capture: true });
 
     if (typeof window !== "undefined") {
       window.addEventListener("scroll", () => this.onScroll(), { passive: true });
@@ -329,6 +330,58 @@ export class Capture {
       props.field_count = names.length;
     }
     this.emit("$form_submit", { properties: props });
+  }
+
+  // -------------------------------------------------------------------------
+  // Form control changes (selects, checkboxes, radios, inputs)
+  // -------------------------------------------------------------------------
+
+  /**
+   * Handle a `change` event on a form control. Captures the interaction
+   * (which control the user changed) without ever reading the entered
+   * value. For checkboxes and radios the boolean `checked` state is
+   * included because it is intent, not content. Password, file, and
+   * hidden inputs are skipped entirely as a defense-in-depth measure on
+   * top of the standard fingerprint redaction.
+   *
+   * Why this is core, not a plugin: every web product has forms, and the
+   * gap between "user clicked into the form" and "user submitted the
+   * form" is exactly where field-level interactions (picking a plan,
+   * toggling a setting, choosing a shipping method) become visible.
+   *
+   * Mask-at-source: a control inside a `data-revu-mask` region still emits
+   * $change (the interaction happened) but withholds the `checked` state,
+   * mirroring how `$form_submit` drops field names and types for masked
+   * forms. `checked` is the user's literal answer (a consent box, a
+   * sensitive selection), so it is content, not just intent, and must not
+   * leave a masked region. `control_type` stays: it is structural and
+   * already carried by the redacted fingerprint's tag, exactly as a masked
+   * click's $autocapture is.
+   *
+   * @param {Event} e
+   */
+  onChange(e) {
+    const el = composedElement(e);
+    if (!el) return;
+    const tag = (el.tagName || "").toLowerCase();
+    if (tag !== "input" && tag !== "select" && tag !== "textarea") return;
+    const isInput = tag === "input";
+    const input = /** @type {HTMLInputElement} */ (el);
+    const type = isInput ? (input.type || "text").toLowerCase() : tag;
+    // Password, file, and hidden inputs are never observed at all. Even
+    // an interaction event for these would risk leaking sensitive intent
+    // (file name in the change event's target, for example) or be
+    // useless (hidden inputs).
+    if (isInput && (type === "password" || type === "file" || type === "hidden")) return;
+
+    const masked = !!closestMask(el);
+
+    /** @type {Record<string, unknown>} */
+    const props = { path: routePath(), control_type: type };
+    if (!masked && isInput && (type === "checkbox" || type === "radio")) {
+      props.checked = !!input.checked;
+    }
+    this.emit("$change", { fingerprint: fingerprint(el), properties: props });
   }
 
   // -------------------------------------------------------------------------
