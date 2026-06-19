@@ -99,6 +99,17 @@ function setScrollY(y) {
   Object.defineProperty(window, "scrollY", { configurable: true, value: y });
 }
 
+/**
+ * Force the scroll throttle gate open and run one `onScroll` pass, so a test
+ * can step through scroll positions deterministically without waiting on the
+ * real `SCROLL_THROTTLE_MS` timer.
+ * @param {import("../src/capture.js").Capture} cap
+ */
+function tick(cap) {
+  cap._scrollThrottled = false;
+  cap.onScroll();
+}
+
 describe("Capture", () => {
   test("emits $pageview on start with url, path, referrer, title", () => {
     document.title = "Home";
@@ -540,11 +551,10 @@ describe("Capture - scroll depth", () => {
       // Each call resets the throttle gate first so the test exercises
       // milestone semantics without waiting on the real 250ms timer.
       // The throttle has its own dedicated test below.
-      const tick = () => { cap._scrollThrottled = false; cap.onScroll(); };
-      setScrollY(0); tick(); // depth = 800/4000 = 20% -> nothing
-      setScrollY(200); tick(); // (200+800)/4000 = 25% -> milestone 25
-      setScrollY(200); tick(); // same 25% -> NO repeat
-      setScrollY(1200); tick(); // (1200+800)/4000 = 50% -> milestone 50
+      setScrollY(0); tick(cap); // depth = 800/4000 = 20% -> nothing
+      setScrollY(200); tick(cap); // (200+800)/4000 = 25% -> milestone 25
+      setScrollY(200); tick(cap); // same 25% -> NO repeat
+      setScrollY(1200); tick(cap); // (1200+800)/4000 = 50% -> milestone 50
 
       const scrolls = events.filter((e) => e.type === "$scroll");
       expect(scrolls.map((s) => s.data.properties.depth_percent)).toEqual([25, 50]);
@@ -680,6 +690,127 @@ describe("Capture - page leave + engagement time", () => {
 
     const leaves = events.filter((e) => e.type === "$page_leave");
     expect(leaves).toHaveLength(2);
+  });
+});
+
+describe("Capture - scroll scalars on $page_leave", () => {
+  /**
+   * Scrollback (max > final) is the signal you cannot derive from the
+   * 25/50/75/100 milestone events: those fire once per crossed milestone
+   * and never re-emit when the user goes back up. The two scalars on
+   * $page_leave (max_scroll_percent, final_scroll_percent) are the
+   * scrollback-and-drop-off primitive for the dashboard.
+   */
+  test("$page_leave carries max_scroll_percent and final_scroll_percent after a down-then-up trip", () => {
+    const restore = stubScrollGeometry({ innerHeight: 800, scrollHeight: 4000 });
+    const { cap, events } = makeCapture();
+    cap.start();
+    events.length = 0;
+    try {
+      setScrollY(200); tick(cap);  // 25%
+      setScrollY(1200); tick(cap); // 50%
+      setScrollY(2200); tick(cap); // 75%
+      setScrollY(400); tick(cap);  // back up to 30% (final), max stays 75
+      window.dispatchEvent(new Event("pagehide"));
+
+      const leave = events.find((e) => e.type === "$page_leave");
+      expect(leave).toBeDefined();
+      expect(leave?.data.properties.max_scroll_percent).toBe(75);
+      expect(leave?.data.properties.final_scroll_percent).toBe(30);
+    } finally {
+      restore();
+    }
+  });
+
+  test("a document shorter than the viewport seeds max + final at 100 even without scroll", () => {
+    const restore = stubScrollGeometry({ innerHeight: 1000, scrollHeight: 500 });
+    const { cap, events } = makeCapture();
+    cap.start();
+    events.length = 0;
+    try {
+      // No onScroll() call; user never scrolls. Page already 100% visible.
+      window.dispatchEvent(new Event("pagehide"));
+
+      const leave = events.find((e) => e.type === "$page_leave");
+      expect(leave?.data.properties.max_scroll_percent).toBe(100);
+      expect(leave?.data.properties.final_scroll_percent).toBe(100);
+    } finally {
+      restore();
+    }
+  });
+
+  test("user landing mid-page (deep link / bfcache restore) is seeded at the landing depth", () => {
+    // Deep link to `/article#section-3`: the browser scrolls the user to
+    // the anchor before our pageview seed runs. We must record the landing
+    // position as the starting max + final, not 0.
+    const restore = stubScrollGeometry({ innerHeight: 800, scrollHeight: 4000 });
+    setScrollY(1200); // (1200 + 800) / 4000 = 50%
+    const { cap, events } = makeCapture();
+    cap.start();
+    events.length = 0;
+    try {
+      // No further scrolling; user leaves immediately. The leave must
+      // reflect that the user was mid-page from the start.
+      window.dispatchEvent(new Event("pagehide"));
+
+      const leave = events.find((e) => e.type === "$page_leave");
+      expect(leave?.data.properties.max_scroll_percent).toBe(50);
+      expect(leave?.data.properties.final_scroll_percent).toBe(50);
+    } finally {
+      restore();
+      setScrollY(0);
+    }
+  });
+
+  test("landing mid-page then scrolling further down banks the deeper max", () => {
+    const restore = stubScrollGeometry({ innerHeight: 800, scrollHeight: 4000 });
+    setScrollY(1200); // land at 50%
+    const { cap, events } = makeCapture();
+    cap.start();
+    events.length = 0;
+    try {
+      setScrollY(2400); tick(cap); // scroll down to 80%
+      setScrollY(1600); tick(cap); // scroll back up to 60%
+      window.dispatchEvent(new Event("pagehide"));
+
+      const leave = events.find((e) => e.type === "$page_leave");
+      // Max captures the deepest reach (80%), final captures the leave
+      // position (60%). Scrollback delta is 20% even though the user
+      // started in the middle.
+      expect(leave?.data.properties.max_scroll_percent).toBe(80);
+      expect(leave?.data.properties.final_scroll_percent).toBe(60);
+    } finally {
+      restore();
+      setScrollY(0);
+    }
+  });
+
+  test("SPA route change resets max + final for the new page", () => {
+    const restore = stubScrollGeometry({ innerHeight: 800, scrollHeight: 4000 });
+    const { cap, events } = makeCapture();
+    cap.start();
+    events.length = 0;
+    try {
+      setScrollY(2200); tick(cap); // 75% on page A
+      // SPA navigation closes out page A and starts page B at the top.
+      setScrollY(0);
+      history.pushState(null, "", "/next");
+      // The $page_leave for page A must reflect page A's furthest depth.
+      const leaveA = events.find((e) => e.type === "$page_leave");
+      expect(leaveA?.data.properties.path).toBe("/");
+      expect(leaveA?.data.properties.max_scroll_percent).toBe(75);
+
+      // Now terminate page B. Its max must NOT carry over from page A.
+      window.dispatchEvent(new Event("pagehide"));
+      const leaveB = events.filter((e) => e.type === "$page_leave").pop();
+      expect(leaveB?.data.properties.path).toBe("/next");
+      // Page B was seeded at 20% (scrollY=0, viewport 800 of 4000) and the
+      // user never scrolled, so max + final both equal the seed.
+      expect(leaveB?.data.properties.max_scroll_percent).toBe(20);
+      expect(leaveB?.data.properties.final_scroll_percent).toBe(20);
+    } finally {
+      restore();
+    }
   });
 });
 

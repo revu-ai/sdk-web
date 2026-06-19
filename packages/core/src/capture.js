@@ -57,6 +57,18 @@ export class Capture {
     this.lastPath = undefined;
     /** @type {Set<number>} Scroll milestones already fired on the current page. */
     this._scrollFired = new Set();
+    /**
+     * @type {number} Highest scroll-depth percentage reached on the current
+     * page (0-100). Banked on $page_leave so the dashboard can report exact
+     * max depth and derive scrollback as (max - final).
+     */
+    this._maxScrollPercent = 0;
+    /**
+     * @type {number} Current scroll-depth percentage on the current page
+     * (0-100). Banked on $page_leave so the dashboard can report drop-off
+     * depth (where the user actually left the page).
+     */
+    this._lastScrollPercent = 0;
     /** @type {Array<{ key: string, t: number }>} Sliding window of recent clicks. */
     this._recentClicks = [];
     /** @type {{ w: number, h: number }|null} */
@@ -130,6 +142,14 @@ export class Capture {
     this.lastPath = newPath;
     this._scrollFired = new Set();
     this._recentClicks = [];
+    // Reset scroll-depth scalars for the new page, then seed from the current
+    // viewport so short pages that fit without scrolling record their actual
+    // visible coverage (computeScrollDepthPercent returns 100 in that case),
+    // not a misleading 0.
+    this._maxScrollPercent = 0;
+    this._lastScrollPercent = 0;
+    const initialDepth = computeScrollDepthPercent();
+    if (initialDepth != null) this._recordScrollDepth(initialDepth);
     // Re-arm $page_leave for the new path: an SPA navigation closes out the
     // previous page (handled above) and starts a fresh one, which must be
     // eligible to emit its own $page_leave on the next terminal signal.
@@ -388,6 +408,18 @@ export class Capture {
   // Scroll depth (25 / 50 / 75 / 100% milestones, one per milestone per page)
   // -------------------------------------------------------------------------
 
+  /**
+   * Bank a scroll-depth sample for the current page: advance the monotonic
+   * max and record the latest position. Shared by the live scroll handler
+   * and the per-page seed so the "max only grows, last is current" invariant
+   * lives in one place and `$page_leave` can carry both scalars.
+   * @param {number} depth  Scroll-depth percentage in [0, 100].
+   */
+  _recordScrollDepth(depth) {
+    if (depth > this._maxScrollPercent) this._maxScrollPercent = depth;
+    this._lastScrollPercent = depth;
+  }
+
   onScroll() {
     if (this._scrollThrottled) return;
     this._scrollThrottled = true;
@@ -397,6 +429,7 @@ export class Capture {
 
     const depth = computeScrollDepthPercent();
     if (depth == null) return;
+    this._recordScrollDepth(depth);
     for (const milestone of SCROLL_MILESTONES) {
       if (depth >= milestone && !this._scrollFired.has(milestone)) {
         this._scrollFired.add(milestone);
@@ -478,6 +511,13 @@ export class Capture {
     const properties = {
       path,
       engagement_time_ms: this.attention.flushAndReset(),
+      // Exact furthest depth reached on this page (0-100). Lets the dashboard
+      // report continuous percentiles instead of bucketing into milestones.
+      max_scroll_percent: Math.round(this._maxScrollPercent),
+      // Exact depth at the moment of leave (0-100). Combined with max_scroll
+      // it encodes scrollback (`max - final > 0` means the user scrolled back
+      // up before leaving) and drop-off depth ("where do users actually go?").
+      final_scroll_percent: Math.round(this._lastScrollPercent),
     };
     if (this._pendingPersisted !== undefined) {
       properties.persisted = this._pendingPersisted;
