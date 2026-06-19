@@ -14,7 +14,7 @@
  * full event off to the transport.
  */
 
-import { fingerprint } from "./fingerprint.js";
+import { fingerprint, closestMask } from "./fingerprint.js";
 import { routePath } from "./utils.js";
 
 // ---------------------------------------------------------------------------
@@ -305,7 +305,7 @@ export class Capture {
   onSubmit(e) {
     const form = /** @type {HTMLFormElement|null} */ (e.target);
     if (!form || form.tagName !== "FORM") return;
-    const masked = !!(form.closest && form.closest("[data-revu-mask]"));
+    const masked = !!closestMask(form);
     /** @type {Record<string, unknown>} */
     const props = {
       path: routePath(),

@@ -99,16 +99,30 @@ export function isSensitive(el) {
   if (tag === "input" || tag === "textarea" || tag === "select") return true;
   const ce = el.getAttribute("contenteditable");
   if (ce !== null && ce !== "false") return true;
-  // Ancestor walk for the opt-in marker; keeps the per-element check cheap.
-  // Crosses Shadow DOM boundaries so a `data-revu-mask` on the host applies
-  // to every element in its shadow tree.
+  return closestMask(el) !== null;
+}
+
+/**
+ * The nearest ancestor (including `el` itself) opted into masking via
+ * `data-revu-mask`, or null when none. Crosses Shadow DOM boundaries so a
+ * `data-revu-mask` on a custom-element host masks its entire shadow tree,
+ * matching {@link isSensitive}.
+ *
+ * This is the single source of truth for mask-at-source: every layer that
+ * has to honor the marker (fingerprint redaction here, form-submit and
+ * form-control capture in capture.js) shares it so the opt-in behaves
+ * identically everywhere, including across shadow boundaries.
+ * @param {Element|null} el
+ * @returns {Element|null}
+ */
+export function closestMask(el) {
   /** @type {Element|null} */
   let node = el;
   while (node && node.nodeType === 1) {
-    if (node.hasAttribute("data-revu-mask")) return true;
+    if (node.hasAttribute("data-revu-mask")) return node;
     node = parentAcrossShadow(node);
   }
-  return false;
+  return null;
 }
 
 /**
