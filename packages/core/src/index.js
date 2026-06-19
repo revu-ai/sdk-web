@@ -4,7 +4,7 @@
  * One-line usage:
  * ```js
  * import revu from "@revu-ai/core";
- * revu.init({ apiKey: "phc_xxx" });
+ * revu.init({ apiKey: "revu_pk_..." });
  * ```
  *
  * Every public method is wrapped with `safe()` so the SDK can **never throw
