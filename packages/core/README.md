@@ -3,150 +3,229 @@
 [![npm](https://img.shields.io/npm/v/@revu-ai/core.svg)](https://www.npmjs.com/package/@revu-ai/core)
 [![ci](https://github.com/revu-ai/sdk-web/actions/workflows/ci.yml/badge.svg)](https://github.com/revu-ai/sdk-web/actions/workflows/ci.yml)
 [![license](https://img.shields.io/npm/l/@revu-ai/core.svg)](https://github.com/revu-ai/sdk-web/blob/main/LICENSE)
+[![size](https://img.shields.io/badge/min-22.5%20kB-blue)](#size)
+[![gzip](https://img.shields.io/badge/gzip-7.1%20kB-blue)](#size)
 
-One-line web behavioral analytics. The lean capture core for [REVU](https://revu.ai), the Feedback and Behavior Intelligence platform.
+The lean capture core of the REVU Web SDK. One line in your page
+captures pageviews, clicks, scroll depth, form submits, downloads,
+outbound links, engagement time, and Web Vitals, with a persistent
+visitor id already attached. The intelligence (taxonomy, self-healing,
+cross-modal fusion) runs server-side, so the bundle on your page stays
+small, fast, and single-purpose: capture, identify, transport.
 
 ```js
 import revu from "@revu-ai/core";
 
-revu.init({ apiKey: "your-write-key" });
-// Page views and clicks are captured automatically.
-// Every event already carries a persistent visitor id.
+revu.init({ apiKey: "revu_pk_..." });
+// Pageviews and clicks ship automatically. Every event carries a
+// persistent visitor id, a rolling session id, and environment context.
 
-revu.identify("user-123");                            // on login
-revu.capture("checkout_completed", { plan: "pro" });  // optional explicit event
-revu.reset();                                         // on logout
+revu.identify("user-123"); // on login
+revu.capture("checkout_completed", { plan: "pro" }); // optional explicit event
+revu.reset(); // on logout
 ```
+
+ESM only. **Zero runtime dependencies.** 23.3 kB minified, 7.3 kB gzipped.
+
+## Documentation
+
+The full reference manual lives in **[docs/](./docs/index.md)**: public
+API, configuration, concepts, plugins, privacy, transport, and
+troubleshooting. Start there for anything beyond the quickstart on this
+page.
+
+A few high-traffic jumps:
+
+- [Public API](./docs/api.md) - every method, with signature, example,
+  and edge cases.
+- [Why sessions continue across reloads](./docs/configuration.md#sessiontimeoutms-sessions-are-engagement-not-page-visits) -
+  the 30 minute window, how to change it, and why a session is
+  engagement (not a single page visit).
+- [Troubleshooting](./docs/troubleshooting.md) - CSP, `sendBeacon`,
+  mobile Safari terminal events, durable queue, identify and reset
+  semantics.
 
 ## Install
 
+From a package manager:
+
 ```bash
 npm install @revu-ai/core
-# or: bun add @revu-ai/core
-# or: pnpm add @revu-ai/core
+# or
+bun add @revu-ai/core
+# or
+pnpm add @revu-ai/core
 ```
 
-ESM only. Zero runtime dependencies. **21.3 kB minified / 6.9 kB gzipped.**
+Or load it directly from `cdn.revu.ai` (no build step required, see
+the [script tag quickstart](#plain-html-script-tag-no-bundler)):
 
-## What gets captured automatically
+```html
+<script type="module">
+  import revu from "https://cdn.revu.ai/behavior/0.1.0";
+</script>
+```
 
-| Event | When |
-|---|---|
-| `$pageview` | Initial load and SPA route changes (`pushState`, `replaceState`, `popstate`, `hashchange`) |
-| `$autocapture` | Click on any element; carries a stable selector fingerprint |
-| `$rightclick`, `$rageclick` | Context-menu and three clicks on the same target within 1 s |
-| `$scroll`, `$resize` | 25 / 50 / 75 / 100% scroll milestones; debounced resize gestures |
-| `$form_submit` | Field metadata only, never values |
-| `$file_download`, `$outbound_link` | Download links and off-domain links |
-| `$page_leave` | With `engagement_time_ms` (visible time on the page) |
-| `$tab_hidden`, `$tab_visible`, `$idle`, `$active` | Engagement and idle lifecycle |
-| `$web_vital` | LCP, INP, CLS on terminal page lifecycle |
-| `$identify`, `$reset` | Identity transitions |
+## Your first event in 60 seconds
 
-Every event also carries environment context (`$user_agent`, viewport, language, timezone, referrer) so the server can break down by browser and locale without host wiring, plus `$sdk_version` so the server knows which SDK build produced it. UTM and click-id landing attribution are derived server-side from the captured URL on the first `$pageview` of each session.
-
-Set `environment: "staging"` (or `"development"`) in `init()` to keep non-prod traffic out of the default dashboard view. The label is stamped on every event as `$environment`. Default is `"production"`.
-
-## Identity
-
-- **`anonymousId`** (device-level) generated on first visit, persisted across reloads.
-- **`userId`** (person-level) auto-generated on first visit. `revu.identify("real-id")` replaces it on login; `revu.reset()` rotates on logout.
-- **`sessionId`** rolls forward across reloads inside a 30-minute window (`sessionTimeoutMs`). Set to `0` to give every load a fresh session.
-
-Both persistent ids are mirrored to localStorage and a first-party cookie by default, so eviction of one store recovers from the other.
-
-For cross-device flows (a user signs up on desktop, clicks an email link on their phone), call `revu.alias(authoritativeId)` on the second device after auth resolves. Unlike `identify()`, `alias()` does not change the local user id; it tells the server the current id is the same person as `authoritativeId` so dashboards stitch the journey. Idempotent: repeated calls with the same id produce one mapping.
-
-## Custom events
-
-For signals autocapture cannot see (server-side completions, async events, wizard steps that do not change the URL):
+### ES modules (Vite, Next.js, SvelteKit, Remix, Astro, etc.)
 
 ```js
-revu.capture("checkout_completed", {
-  plan: "pro",
-  amount_cents: 4900,
-  currency: "USD",
+// app.js
+import revu from "@revu-ai/core";
+
+revu.init({
+  apiKey: "revu_pk_your_write_key",
 });
-revu.capture("report_exported", { format: "pdf", pages: 12 });
 ```
 
-Caller properties always win over engine values on collision, so the host can override anything when it knows better.
+Open the page. A `$pageview` and the surrounding environment context
+ship within five seconds (the default flush interval), or sooner if a
+batch fills up. Click anything: a `$autocapture` event is queued.
 
-## Privacy
+### Plain HTML (script tag, no bundler)
 
-- **No input values are ever read** from `<input>`, `<textarea>`, `<select>`, or `contenteditable` elements.
-- **Form submits carry metadata only**: `form_id`, `form_name`, `action`, `method`, `field_names[]`, `field_types[]`, `field_count`. Never values.
-- **Masking attribute.** Add `data-revu-mask` to any element (or ancestor) to opt its subtree out of text and label capture.
-- **Sensitive input types** (`password`, `email`, `tel`, credit-card, `search`) are redacted at source.
+The SDK is hosted on `cdn.revu.ai` as ESM. Use the floating
+`latest` URL for getting started:
 
-## Safety
-
-Every public entry (`init`, `capture`, `identify`, `reset`, `flush`, `use`) is wrapped so internal errors are swallowed and (with `debug: true`) logged. The SDK never throws into the host page.
-
-## Build version
-
-`revu.version` returns the build string of the bundle (e.g. `"0.1.0"`). The same string lands on every event as `properties.$sdk_version` so the server can correlate behavior with SDK builds, and so support tickets always include the build the user is on.
-
-```js
-console.log(revu.version); // "0.1.0"
+```html
+<script type="module">
+  import revu from "https://cdn.revu.ai/behavior";
+  revu.init({ apiKey: "revu_pk_your_write_key" });
+</script>
 ```
 
-## Transport and offline
+For production, **pin an exact version** so a future SDK release does
+not change the bytes your page loads without warning:
 
-- **Batched JSON POST** to the configured `host` (default `https://api.revu.ai`). `fetch` with `keepalive: true` while the page is live; `sendBeacon` on `pagehide` / `visibilitychange=hidden` to flush the last batch on unload.
-- **Capped exponential backoff** on transient failures.
-- **Durable offline queue** backed by localStorage. Events captured offline survive reloads and auto-flush on the next `online` event.
+```html
+<script type="module">
+  import revu from "https://cdn.revu.ai/behavior/0.1.0";
+  revu.init({ apiKey: "revu_pk_your_write_key" });
+</script>
+```
 
-## Size
+The CDN sets long-cache headers on pinned URLs (the file at a given
+version never changes), and a short cache TTL on `latest` so a release
+propagates within minutes. Every response is pre-compressed at
+publish time, so a modern browser receives the bundle as brotli
+(typically around 6.5 kB on the wire for the current version).
 
-| Metric | Current | Budget |
-|---|---|---|
-| Minified | 21.3 kB | 30 kB |
-| Gzipped on wire | 6.9 kB | 10 kB |
+If you would rather self-host, copy
+`node_modules/@revu-ai/core/dist/index.js` into your own asset
+pipeline and import from there:
 
-Both axes are CI gates (`bun run size`). Gzipped size is the transfer cost users pay; minified size is the parse and compile cost the browser pays on low-end devices. The budget is a deliberate constraint so the SDK is light enough to cold-load on any page.
+```html
+<script type="module">
+  import revu from "/vendor/revu-core.js";
+  revu.init({ apiKey: "revu_pk_your_write_key" });
+</script>
+```
 
-## Configuration
+### Verify
+
+The fastest way to confirm capture is working before you have the
+dashboard in front of you:
 
 ```js
 revu.init({
-  apiKey: "...",                  // required, public write key (prefix revu_pk_)
-  host: "https://api.revu.ai",    // default
-  environment: "production",      // "production" | "staging" | "development"
-  autoIdentify: true,             // auto-assign userId on first visit
-  persistentStorage: "both",      // "both" | "localStorage"
-  cookieDomain: ".example.com",   // share visitor across subdomains
-  sessionTimeoutMs: 1_800_000,    // 30 minutes; 0 = fresh session every load
-  captureAttention: true,         // $tab_*, $idle, $active events
-  captureWebVitals: true,         // $web_vital events
-  idleTimeoutMs: 30_000,          // 0 disables idle detection
-  debug: false,                   // log internal errors when true
-  onEvent: (event) => { ... },    // local hook (debugging, mirroring)
-  plugins: [],                    // opt-in modules
+  apiKey: "revu_pk_your_write_key",
+  debug: true, // logs every captured event
+  onEvent: (event) => console.log(event),
 });
 ```
 
-## Plugins
+You should see at least a `$pageview` in the console immediately after
+init, plus one event per interaction.
 
-```js
-import revu from "@revu-ai/core";
-import { exceptions } from "@revu-ai/core/exceptions"; // future
+## What gets captured automatically
 
-revu.init({ apiKey: "...", plugins: [exceptions()] });
-```
+| Event                           | When it fires                                                                                   |
+| ------------------------------- | ----------------------------------------------------------------------------------------------- |
+| `$pageview`                     | Initial load and every SPA route change (`pushState`, `replaceState`, `popstate`, `hashchange`) |
+| `$autocapture`                  | A click anywhere; carries a semantic fingerprint of the element                                 |
+| `$rightclick`                   | Context-menu click on any element                                                               |
+| `$rageclick`                    | Three clicks on the same target within one second                                               |
+| `$scroll`                       | 25 / 50 / 75 / 100% scroll-depth milestones (once per page)                                     |
+| `$resize`                       | Final viewport size after a resize gesture (debounced)                                          |
+| `$form_submit`                  | Form structure (field names and types). Never values.                                           |
+| `$change`                       | Form-control change (select / checkbox / radio / input); the interaction, never the value       |
+| `$file_download`                | Click on a link with `download` or a known file extension                                       |
+| `$outbound_link`                | Click on a link to a different hostname                                                         |
+| `$page_leave`                   | Terminal close or SPA route change, with `engagement_time_ms`                                   |
+| `$page_restore`                 | Back/forward bfcache restore (`pageshow` with `persisted`)                                      |
+| `$tab_hidden`, `$tab_visible`   | Tab visibility transitions, with elapsed ms in each state                                       |
+| `$idle`, `$active`              | No mouse / keyboard / scroll / touch for `idleTimeoutMs`, then resumed                          |
+| `$web_vital`                    | LCP, INP, CLS sampled across the page lifetime, emitted on page hide                            |
+| `$identify`, `$reset`, `$alias` | Identity transitions                                                                            |
 
-`revu.use(plugin)` is the alternative to passing through `init`. Plugins registered before `init()` are queued and drained when init runs.
-
-## Architecture
-
-- **Vanilla JavaScript (ESM) + JSDoc** as the single source of truth for both runtime behavior and emitted `.d.ts` types.
-- **Zero runtime dependencies.** Platform and Web APIs only.
-- **Tree-shakeable** (`"sideEffects": false`); unused modules drop out at the consumer's bundler.
-- **Defensive boundary.** Every public entry is `safe()`-wrapped so an internal failure never propagates into the host page.
+Every event also carries environment context (`$user_agent`,
+`$language`, `$timezone`, screen and viewport geometry, online state,
+connection type when available, initial referrer) and a `$sdk_version`
+stamp so the server can correlate behavior with the exact SDK build
+that produced it.
 
 ## Browser support
 
-Modern evergreen browsers from early 2021 onward: **Safari 14+, Chrome 88+, Firefox 88+, Edge 88+**. The SDK uses platform APIs (`fetch`, `localStorage`, `sendBeacon`, `PerformanceObserver`, `MutationObserver`, `Intl.DateTimeFormat`, `crypto.getRandomValues`, the URL constructor) that all browsers in that floor support. Optional APIs (Network Information for connection type) are read defensively and absent in some engines without affecting capture.
+Modern evergreen browsers from early 2021 onward: **Safari 14+, Chrome
+88+, Firefox 88+, Edge 88+**. The SDK relies on platform APIs
+(`fetch`, `localStorage`, `sendBeacon`, `PerformanceObserver`,
+`MutationObserver`, `Intl.DateTimeFormat`, `crypto.getRandomValues`,
+the URL constructor) that every browser in that floor supports.
+
+Optional APIs are read defensively. Network Information
+(`navigator.connection`) is absent on Safari and Firefox today; events
+captured on those engines simply omit `$connection_type` and
+`$connection_downlink_mbps` without affecting capture.
+
+## Size
+
+| Metric          | Current | Budget |
+| --------------- | ------- | ------ |
+| Minified        | 23.3 kB | 30 kB  |
+| Gzipped on wire | 7.3 kB  | 10 kB  |
+
+Both axes are CI gates (`bun run size`). Gzipped is the transfer cost
+users pay; minified is the parse and compile cost the browser pays on
+low-end devices. The budget is a deliberate constraint so the SDK
+cold-loads on any page without being noticed.
+
+When the SDK is served from `cdn.revu.ai`, the actual wire cost is
+lower than the gzipped budget: the CDN pre-compresses each asset with
+brotli at publish time and serves the brotli variant to every browser
+that supports it (every modern browser does). The current bundle ships
+as around 6.5 kB on the wire for browsers that advertise brotli, with
+gzip as the fallback.
+
+## Versioning and stability
+
+`@revu-ai/core` follows **semver**.
+
+- **Patch** releases (`0.1.0 -> 0.1.1`) ship internal fixes and
+  performance improvements. No public API change.
+- **Minor** releases (`0.1.0 -> 0.2.0`) add new options, new
+  autocapture event types, or new public methods. Existing API stays.
+- **Major** releases (`0.x -> 1.0`, `1.x -> 2.0`) are reserved for
+  breaking changes. We deprecate first: a method or option scheduled
+  for removal stays in place and is called out in the changelog for at
+  least one minor release before it goes away.
+
+The event shape on the wire (the contract with ingest) is versioned
+separately and evolves additively: new fields appear, existing ones
+do not change meaning. The `$sdk_version` on every event lets the
+server correlate behavior with the exact build that emitted it.
+
+The public surface is exactly:
+
+- `revu.init`, `revu.capture`, `revu.identify`, `revu.alias`,
+  `revu.reset`, `revu.flush`, `revu.use`, `revu.version`.
+- The `RevuClient` class, for advanced use cases that need multiple
+  instances.
+- The exported types (`RevuConfig`, `ResolvedConfig`, `RevuEvent`,
+  `Fingerprint`, `RevuPlugin`, `PluginApi`, `SendFn`).
+
+Everything else (internal modules under `src/`, helpers, the storage
+facade) is implementation detail and may change without notice.
 
 ## Changelog
 
