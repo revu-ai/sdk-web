@@ -1305,3 +1305,133 @@ describe("Capture - Shadow DOM", () => {
   });
 });
 
+describe("Capture - redaction invariant: a planted value never leaves the browser", () => {
+  /**
+   * The highest-stakes contract: the SDK captures interactions, never the
+   * content a user supplies. This is a NEGATIVE assertion, the kind that is
+   * easy to under-write, so it is exercised systematically here. Each case
+   * plants a unique SENTINEL into something the user provides (an input
+   * value, a selected option, contenteditable text), performs the real
+   * interaction, and asserts the SENTINEL appears in ZERO emitted events.
+   * The invariant holds with or without masking, because values are never
+   * read at all. Cases that compose across Shadow DOM run in both a light
+   * and a shadow tree so a future change to the boundary walk cannot quietly
+   * start leaking.
+   */
+  const SENTINEL = "do-not-leak-7f3a9q";
+
+  /**
+   * @typedef {object} RedactionCase
+   * @property {string} name
+   * @property {boolean} shadow  Whether the case is also valid inside a shadow root.
+   * @property {() => { target: Element, fire: (el: Element) => void }} make
+   */
+
+  /** @type {RedactionCase[]} */
+  const cases = [
+    {
+      name: "text input change",
+      shadow: true,
+      make: () => {
+        const i = /** @type {HTMLInputElement} */ (document.createElement("input"));
+        i.type = "text";
+        i.value = SENTINEL;
+        return { target: i, fire: (el) => el.dispatchEvent(new Event("change", { bubbles: true, composed: true })) };
+      },
+    },
+    {
+      name: "textarea change",
+      shadow: true,
+      make: () => {
+        const t = /** @type {HTMLTextAreaElement} */ (document.createElement("textarea"));
+        t.value = SENTINEL;
+        return { target: t, fire: (el) => el.dispatchEvent(new Event("change", { bubbles: true, composed: true })) };
+      },
+    },
+    {
+      name: "select change (sentinel as option value and label)",
+      shadow: true,
+      make: () => {
+        const s = /** @type {HTMLSelectElement} */ (document.createElement("select"));
+        const o = document.createElement("option");
+        o.value = SENTINEL;
+        o.textContent = SENTINEL;
+        s.appendChild(o);
+        s.value = SENTINEL;
+        return { target: s, fire: (el) => el.dispatchEvent(new Event("change", { bubbles: true, composed: true })) };
+      },
+    },
+    {
+      name: "click on a filled text input",
+      shadow: true,
+      make: () => {
+        const i = /** @type {HTMLInputElement} */ (document.createElement("input"));
+        i.type = "text";
+        i.value = SENTINEL;
+        return { target: i, fire: (el) => /** @type {HTMLElement} */ (el).click() };
+      },
+    },
+    {
+      name: "click on a contenteditable region",
+      shadow: true,
+      make: () => {
+        const d = document.createElement("div");
+        d.setAttribute("contenteditable", "true");
+        d.textContent = SENTINEL;
+        return { target: d, fire: (el) => /** @type {HTMLElement} */ (el).click() };
+      },
+    },
+    {
+      // Submit events do not compose across a shadow boundary, so the SDK
+      // would never receive a shadow submit: this case is light-DOM only.
+      name: "form submit with a filled field",
+      shadow: false,
+      make: () => {
+        const f = /** @type {HTMLFormElement} */ (document.createElement("form"));
+        const i = /** @type {HTMLInputElement} */ (document.createElement("input"));
+        i.name = "email";
+        i.type = "text";
+        i.value = SENTINEL;
+        f.appendChild(i);
+        return { target: f, fire: (el) => el.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })) };
+      },
+    },
+  ];
+
+  /**
+   * Mount `el` either directly in the document or inside an open shadow root.
+   * @param {Element} el
+   * @param {boolean} inShadow
+   */
+  function mount(el, inShadow) {
+    if (!inShadow) {
+      document.body.appendChild(el);
+      return;
+    }
+    const host = document.createElement("div");
+    document.body.appendChild(host);
+    host.attachShadow({ mode: "open" }).appendChild(el);
+  }
+
+  for (const placement of /** @type {const} */ (["light DOM", "shadow DOM"])) {
+    const inShadow = placement === "shadow DOM";
+    for (const c of cases) {
+      if (inShadow && !c.shadow) continue;
+      test(`${c.name} in ${placement} never leaks the value`, () => {
+        const { target, fire } = c.make();
+        mount(target, inShadow);
+
+        const { cap, events } = makeCapture();
+        cap.start();
+        events.length = 0;
+        fire(target);
+
+        // The interaction must actually have been observed; a zero-event run
+        // would make the no-leak assertion vacuously true.
+        expect(events.length).toBeGreaterThan(0);
+        expect(JSON.stringify(events)).not.toContain(SENTINEL);
+      });
+    }
+  }
+});
+
