@@ -1016,6 +1016,34 @@ describe("Capture - $change on form controls", () => {
   });
 });
 
+describe("Capture - $page_restore on bfcache restore", () => {
+  test("pageshow with persisted=true emits $page_restore with current path", () => {
+    const { cap, events } = makeCapture();
+    cap.start();
+    events.length = 0;
+
+    const e = new Event("pageshow");
+    Object.defineProperty(e, "persisted", { value: true });
+    window.dispatchEvent(e);
+
+    const restore = events.find((ev) => ev.type === "$page_restore");
+    expect(restore).toBeDefined();
+    expect(restore?.data.properties.path).toBe("/");
+  });
+
+  test("pageshow with persisted=false does NOT emit $page_restore (avoids double-counting fresh loads)", () => {
+    const { cap, events } = makeCapture();
+    cap.start();
+    events.length = 0;
+
+    const e = new Event("pageshow");
+    Object.defineProperty(e, "persisted", { value: false });
+    window.dispatchEvent(e);
+
+    expect(events.find((ev) => ev.type === "$page_restore")).toBeUndefined();
+  });
+});
+
 describe("Capture - autocapture element semantics", () => {
   /**
    * The fingerprint shipped with every $autocapture click is the only thing

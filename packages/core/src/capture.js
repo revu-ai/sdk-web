@@ -111,6 +111,11 @@ export class Capture {
       // reset on `visibilitychange -> visible` so a foregrounded page that
       // navigates again later still emits the next $page_leave correctly.
       window.addEventListener("pagehide", (e) => this.onPageHide(e));
+      // bfcache restore: pageshow with persisted=true means the user came
+      // back via the Back button to a parked page, not a fresh load. A
+      // dashboard query that conflates the two undercounts genuine new
+      // navigations and overcounts return visits.
+      window.addEventListener("pageshow", (e) => this.onPageShow(e));
       if (typeof document !== "undefined") {
         document.addEventListener("visibilitychange", () => {
           if (document.visibilityState === "hidden") this.onPageHide();
@@ -496,6 +501,22 @@ export class Capture {
       event && typeof event.persisted === "boolean" ? event.persisted : false;
     this._emitPageLeave(this.lastPath);
     this._pageLeaveEmitted = true;
+  }
+
+  /**
+   * Handle `pageshow`. Only emits when `persisted` is true (bfcache
+   * restore): a normal fresh load already fires `$pageview` via the
+   * boot sequence, so emitting on every pageshow would double-count.
+   * The bfcache case is distinct because the page resumes mid-state
+   * (scroll position, form contents, JS heap) rather than starting
+   * fresh; the dashboard treats this differently for return-visit and
+   * engagement modeling.
+   *
+   * @param {PageTransitionEvent} event
+   */
+  onPageShow(event) {
+    if (!event || event.persisted !== true) return;
+    this.emit("$page_restore", { properties: { path: routePath() } });
   }
 
   /**
