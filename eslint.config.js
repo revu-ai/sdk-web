@@ -44,6 +44,7 @@ export default [
         TextEncoder: "readonly",
         Bun: "readonly",
         Response: "readonly",
+        Blob: "readonly",
         Event: "readonly",
         PopStateEvent: "readonly",
         // DOM types used in JSDoc casts.
