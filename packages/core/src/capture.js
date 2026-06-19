@@ -46,14 +46,12 @@ const DOWNLOAD_EXTENSIONS = /\.(pdf|csv|tsv|xlsx?|docx?|pptx?|zip|tar|gz|7z|rar|
 export class Capture {
   /**
    * @param {EmitFn} emit
-   * @param {{ maskAllInputs: boolean }} options
    * @param {import("./attention.js").Attention} attention  Engagement clock
    *   plus tab visibility / idle tracking. Owns engagement_time_ms; capture
    *   delegates rather than running a second clock.
    */
-  constructor(emit, options, attention) {
+  constructor(emit, attention) {
     this.emit = emit;
-    this.options = options;
     this.attention = attention;
     /** @type {string|undefined} */
     this.lastPath = undefined;

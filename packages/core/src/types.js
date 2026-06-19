@@ -14,7 +14,6 @@
  * @property {boolean} [autoIdentify=true] Auto-generate a persistent user id on first visit so every event arrives attributed to a stable visitor. Explicit `identify()` always overrides and is also persisted. Set to false to keep `user_id` null until the host app calls `identify()`.
  * @property {"localStorage"|"cookie"|"both"} [persistentStorage="both"] Where identity ids are persisted across reloads. `"both"` mirrors to localStorage and a first-party cookie so an eviction of one store is recoverable from the other (defends against Safari ITP wiping localStorage). `"localStorage"` removes the per-request cookie bandwidth on the host domain. `"cookie"` is rarely the right choice but available for completeness.
  * @property {string|null} [cookieDomain=null] When the cookie store is active, the Domain attribute written on the identity cookie. Set to ".example.com" to share one visitor id across subdomains (app.example.com + www.example.com). Unset by default so the cookie stays host-only.
- * @property {boolean} [maskAllInputs=true] Never read input field values (redact-at-source).
  * @property {number} [flushIntervalMs=5000] Max time before a partial batch is sent.
  * @property {number} [flushAt=20]         Queue size that triggers an immediate flush.
  * @property {number} [maxBatch=50]        Max events sent per request (bounds request body size).

@@ -27,7 +27,6 @@ function makeClient() {
     // here keeps the assertions on `previous_user_id` and "no identified
     // user" semantics simple and isolated from the auto-id behavior.
     autoIdentify: false,
-    maskAllInputs: true,
     flushAt: 10_000,
     flushIntervalMs: 60_000,
     maxBatch: 50,

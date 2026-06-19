@@ -52,7 +52,7 @@ function makeCapture() {
     events.push({ type, data: data || {} });
   const attention = new Attention(emit, { captureAttention: false, idleTimeoutMs: 60_000 });
   attention.start();
-  const cap = new Capture(emit, { maskAllInputs: true }, attention);
+  const cap = new Capture(emit, attention);
   return { cap, events };
 }
 

@@ -46,11 +46,7 @@ export class RevuClient {
      // `capture(eventName, properties)` method below. The field still
      // refers to the auto-capture engine specifically, so `autocapture`
      // reads more accurately too.
-    this.autocapture = new Capture(
-      emit,
-      { maskAllInputs: config.maskAllInputs },
-      this.attention,
-    );
+    this.autocapture = new Capture(emit, this.attention);
     this.vitals = new Vitals(emit);
     /** @type {number} */
     this.sequence = 0;

@@ -10,7 +10,6 @@ const DEFAULTS = {
   autoIdentify: true,
   persistentStorage: "both",
   cookieDomain: null,
-  maskAllInputs: true,
   flushIntervalMs: 5000,
   flushAt: 20,
   maxBatch: 50,
