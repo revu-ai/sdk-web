@@ -29,6 +29,8 @@ them, not front-to-back reading.
 
 ### Using the SDK
 
+- **[Install](./install.md)** - the CDN `<script>` snippet, the npm
+  install, version pinning on `cdn.revu.ai`, and SRI hashes.
 - **[Public API](./api.md)** - `init`, `capture`, `identify`, `alias`,
   `reset`, `flush`, `use`, `version`, and the `RevuClient` class.
   Signature, example, and edge cases per method.
