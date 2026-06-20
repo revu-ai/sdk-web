@@ -3,8 +3,8 @@
 [![npm](https://img.shields.io/npm/v/@revu-ai/core.svg)](https://www.npmjs.com/package/@revu-ai/core)
 [![ci](https://github.com/revu-ai/sdk-web/actions/workflows/ci.yml/badge.svg)](https://github.com/revu-ai/sdk-web/actions/workflows/ci.yml)
 [![license](https://img.shields.io/npm/l/@revu-ai/core.svg)](https://github.com/revu-ai/sdk-web/blob/main/LICENSE)
-[![size](https://img.shields.io/badge/min-22.5%20kB-blue)](#size)
-[![gzip](https://img.shields.io/badge/gzip-7.1%20kB-blue)](#size)
+[![size](https://img.shields.io/badge/min-27.89%20kB-blue)](#size)
+[![gzip](https://img.shields.io/badge/gzip-8.85%20kB-blue)](#size)
 
 The lean capture core of the REVU Web SDK. One line in your page
 captures pageviews, clicks, scroll depth, form submits, downloads,
@@ -25,7 +25,7 @@ revu.capture("checkout_completed", { plan: "pro" }); // optional explicit event
 revu.reset(); // on logout
 ```
 
-ESM only. **Zero runtime dependencies.** 23.3 kB minified, 7.3 kB gzipped.
+ESM only. **Zero runtime dependencies.** 27.89 kB minified, 8.85 kB gzipped.
 
 ## Documentation
 
@@ -109,7 +109,7 @@ The CDN sets long-cache headers on pinned URLs (the file at a given
 version never changes), and a short cache TTL on `latest` so a release
 propagates within minutes. Every response is pre-compressed at
 publish time, so a modern browser receives the bundle as brotli
-(typically around 6.5 kB on the wire for the current version).
+(typically around 7.8 kB on the wire for the current version).
 
 If you would rather self-host, copy
 `node_modules/@revu-ai/core/dist/index.js` into your own asset
@@ -156,7 +156,7 @@ init, plus one event per interaction.
 | `$page_restore`                 | Back/forward bfcache restore (`pageshow` with `persisted`)                                      |
 | `$tab_hidden`, `$tab_visible`   | Tab visibility transitions, with elapsed ms in each state                                       |
 | `$idle`, `$active`              | No mouse / keyboard / scroll / touch for `idleTimeoutMs`, then resumed                          |
-| `$web_vital`                    | LCP, INP, CLS sampled across the page lifetime, emitted on page hide                            |
+| `$web_vital`                    | LCP, INP, and CLS (session-windowed per spec), emitted on page hide                             |
 | `$identify`, `$reset`, `$alias` | Identity transitions                                                                            |
 
 Every event also carries environment context (`$user_agent`,
@@ -182,8 +182,8 @@ captured on those engines simply omit `$connection_type` and
 
 | Metric          | Current | Budget |
 | --------------- | ------- | ------ |
-| Minified        | 23.3 kB | 30 kB  |
-| Gzipped on wire | 7.3 kB  | 10 kB  |
+| Minified        | 27.89 kB | 30 kB  |
+| Gzipped on wire | 8.85 kB  | 10 kB  |
 
 Both axes are CI gates (`bun run size`). Gzipped is the transfer cost
 users pay; minified is the parse and compile cost the browser pays on
@@ -194,7 +194,7 @@ When the SDK is served from `cdn.revu.ai`, the actual wire cost is
 lower than the gzipped budget: the CDN pre-compresses each asset with
 brotli at publish time and serves the brotli variant to every browser
 that supports it (every modern browser does). The current bundle ships
-as around 6.5 kB on the wire for browsers that advertise brotli, with
+as around 7.8 kB on the wire for browsers that advertise brotli, with
 gzip as the fallback.
 
 ## Versioning and stability
