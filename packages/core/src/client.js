@@ -53,16 +53,23 @@ export class RevuClient {
     // sink does is feed the standard pipeline (identity + context + transport).
     const emit = (/** @type {string} */ type, /** @type {any} */ data) =>
       this.record(type, data);
-    this.attention = new Attention(emit, {
-      idleTimeoutMs: config.idleTimeoutMs,
-      captureAttention: config.captureAttention,
-    });
+    // Shared error reporter for the DOM-listener `safe()` wraps. Listener
+    // exceptions are always swallowed (never propagate into the host), but in
+    // debug they surface here so an SDK bug is not invisible while debugging.
+    const reportError = (/** @type {unknown} */ err) => {
+      if (this.config.debug) console.error("[REVU]", err);
+    };
+    this.attention = new Attention(
+      emit,
+      { idleTimeoutMs: config.idleTimeoutMs, captureAttention: config.captureAttention },
+      reportError,
+    );
     // Renamed from `this.capture` to free the verb for the public
      // `capture(eventName, properties)` method below. The field still
      // refers to the auto-capture engine specifically, so `autocapture`
      // reads more accurately too.
-    this.autocapture = new Capture(emit, this.attention);
-    this.vitals = new Vitals(emit);
+    this.autocapture = new Capture(emit, this.attention, reportError);
+    this.vitals = new Vitals(emit, reportError);
     /** @type {number} */
     this.sequence = 0;
     /** @type {string|null} Session id the cached sampling decision was made for. */

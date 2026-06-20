@@ -52,9 +52,13 @@ export class Attention {
    * @param {object} [options]
    * @param {number} [options.idleTimeoutMs=30000]
    * @param {boolean} [options.captureAttention=true]
+   * @param {(err: unknown) => void} [onError]  Reports a swallowed
+   *   listener-handler error (logged in debug, no-op otherwise).
    */
-  constructor(emit, options = {}) {
+  constructor(emit, options = {}, onError) {
     this.emit = emit;
+    /** @type {(err: unknown) => void} */
+    this.onError = onError || (() => {});
     this.idleTimeoutMs = typeof options.idleTimeoutMs === "number"
       ? options.idleTimeoutMs
       : 30000;
@@ -97,10 +101,10 @@ export class Attention {
     if (typeof document === "undefined") return;
     this._seedFromCurrentVisibility();
     // Listeners wrapped in `safe()` so a handler throw never propagates into
-    // the host's event dispatch (cardinal invariant).
-    document.addEventListener("visibilitychange", safe(() => this.onVisibilityChange()));
+    // the host's event dispatch (cardinal invariant); logged in debug.
+    document.addEventListener("visibilitychange", safe(() => this.onVisibilityChange(), this.onError));
     if (this.idleTimeoutMs > 0) {
-      const handler = safe(() => this.onActivity());
+      const handler = safe(() => this.onActivity(), this.onError);
       for (const type of ACTIVITY_EVENTS) {
         document.addEventListener(type, handler, { passive: true, capture: true });
       }

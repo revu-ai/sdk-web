@@ -49,10 +49,15 @@ export class Capture {
    * @param {import("./attention.js").Attention} attention  Engagement clock
    *   plus tab visibility / idle tracking. Owns engagement_time_ms; capture
    *   delegates rather than running a second clock.
+   * @param {(err: unknown) => void} [onError]  Reports a swallowed
+   *   listener-handler error; in debug it logs, otherwise it is a no-op. The
+   *   handler is always swallowed regardless (never propagates to the host).
    */
-  constructor(emit, attention) {
+  constructor(emit, attention, onError) {
     this.emit = emit;
     this.attention = attention;
+    /** @type {(err: unknown) => void} */
+    this.onError = onError || (() => {});
     /** @type {string|undefined} */
     this.lastPath = undefined;
     /** @type {Set<number>} Scroll milestones already fired on the current page. */
@@ -97,20 +102,23 @@ export class Capture {
     this.installSpaNavigation();
     if (typeof document === "undefined") return;
 
+    // Wrap every listener so a throw inside a handler (an exotic DOM node, a
+    // host-monkeypatched API) is swallowed instead of propagating out of the
+    // SDK's listener into the host's event dispatch (cardinal invariant); the
+    // error still surfaces in debug via `this.onError`.
+    const guard = (/** @type {(...a: any[]) => any} */ fn) => safe(fn, this.onError);
+
     // Capture-phase listeners so we observe interactions even when the
     // host stops propagation at a lower handler. `passive` on scroll so
-    // we never block the browser's scroll thread. Every listener is wrapped
-    // in `safe()` so a throw inside a handler (an exotic DOM node, a
-    // host-monkeypatched API) is swallowed instead of propagating out of the
-    // SDK's listener into the host's event dispatch (cardinal invariant).
-    document.addEventListener("click", safe((e) => this.onClick(e)), { capture: true });
-    document.addEventListener("contextmenu", safe((e) => this.onContextMenu(e)), { capture: true });
-    document.addEventListener("submit", safe((e) => this.onSubmit(e)), { capture: true });
-    document.addEventListener("change", safe((e) => this.onChange(e)), { capture: true });
+    // we never block the browser's scroll thread.
+    document.addEventListener("click", guard((e) => this.onClick(e)), { capture: true });
+    document.addEventListener("contextmenu", guard((e) => this.onContextMenu(e)), { capture: true });
+    document.addEventListener("submit", guard((e) => this.onSubmit(e)), { capture: true });
+    document.addEventListener("change", guard((e) => this.onChange(e)), { capture: true });
 
     if (typeof window !== "undefined") {
-      window.addEventListener("scroll", safe(() => this.onScroll()), { passive: true });
-      window.addEventListener("resize", safe(() => this.onResize()));
+      window.addEventListener("scroll", guard(() => this.onScroll()), { passive: true });
+      window.addEventListener("resize", guard(() => this.onResize()));
       // Terminal signal for $page_leave. We listen on BOTH `pagehide` and
       // `visibilitychange -> hidden` and dedupe, because:
       //   - On desktop, `pagehide` fires reliably on tab close / navigation.
@@ -121,14 +129,14 @@ export class Capture {
       // unreliable on mobile generally). The `_pageLeaveEmitted` flag is
       // reset on `visibilitychange -> visible` so a foregrounded page that
       // navigates again later still emits the next $page_leave correctly.
-      window.addEventListener("pagehide", safe((e) => this.onPageHide(e)));
+      window.addEventListener("pagehide", guard((e) => this.onPageHide(e)));
       // bfcache restore: pageshow with persisted=true means the user came
       // back via the Back button to a parked page, not a fresh load. A
       // dashboard query that conflates the two undercounts genuine new
       // navigations and overcounts return visits.
-      window.addEventListener("pageshow", safe((e) => this.onPageShow(e)));
+      window.addEventListener("pageshow", guard((e) => this.onPageShow(e)));
       if (typeof document !== "undefined") {
-        document.addEventListener("visibilitychange", safe(() => {
+        document.addEventListener("visibilitychange", guard(() => {
           if (document.visibilityState === "hidden") this.onPageHide();
           else if (document.visibilityState === "visible") {
             this._pageLeaveEmitted = false;
@@ -204,7 +212,7 @@ export class Capture {
     // surface in the host's own navigation call, not just a listener.
     const fire = safe(() => {
       if (routePath() !== this.lastPath) this.capturePageview();
-    });
+    }, this.onError);
     for (const method of /** @type {const} */ (["pushState", "replaceState"])) {
       const original = history[method];
       history[method] = function patched(/** @type {any[]} */ ...args) {

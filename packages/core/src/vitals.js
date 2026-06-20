@@ -36,9 +36,15 @@ import { safe } from "./utils.js";
  * `$web_vital` event per metric on terminal page lifecycle.
  */
 export class Vitals {
-  /** @param {EmitFn} emit */
-  constructor(emit) {
+  /**
+   * @param {EmitFn} emit
+   * @param {(err: unknown) => void} [onError]  Reports a swallowed listener /
+   *   observer error (logged in debug, no-op otherwise).
+   */
+  constructor(emit, onError) {
     this.emit = emit;
+    /** @type {(err: unknown) => void} */
+    this.onError = onError || (() => {});
     /** @type {number|null} Largest Contentful Paint, ms since navigation start. */
     this._lcp = null;
     /** @type {number} Cumulative Layout Shift: the largest session window seen. */
@@ -107,11 +113,11 @@ export class Vitals {
       }
     });
 
-    const report = safe(() => this._report());
+    const report = safe(() => this._report(), this.onError);
     window.addEventListener("pagehide", report);
     document.addEventListener("visibilitychange", safe(() => {
       if (document.visibilityState === "hidden") report();
-    }));
+    }, this.onError));
   }
 
   /**
@@ -155,7 +161,7 @@ export class Vitals {
   _observe(type, callback, options = {}) {
     try {
       const observer = new PerformanceObserver(
-        safe((list) => callback(list.getEntries())),
+        safe((list) => callback(list.getEntries()), this.onError),
       );
       observer.observe(
         /** @type {any} */ ({ type, buffered: true, ...options }),

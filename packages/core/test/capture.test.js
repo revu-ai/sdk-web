@@ -144,6 +144,26 @@ describe("Capture", () => {
     expect(pv.data.properties.path).toBe("/welcome");
   });
 
+  test("a throwing handler is swallowed but reported via onError (debug visibility)", () => {
+    /** @type {unknown[]} */
+    const errors = [];
+    const attention = new Attention(() => {}, { captureAttention: false, idleTimeoutMs: 60_000 });
+    attention.start();
+    const cap = new Capture(() => {}, attention, (err) => errors.push(err));
+    cap.start();
+    // Force the click handler to throw at dispatch time.
+    cap.onClick = () => {
+      throw new Error("handler boom");
+    };
+    const btn = document.createElement("button");
+    document.body.appendChild(btn);
+
+    // The throw must not escape into the host's event dispatch...
+    expect(() => btn.click()).not.toThrow();
+    // ...but it must be reported so a debug session can see the SDK bug.
+    expect(errors.length).toBeGreaterThan(0);
+  });
+
   test("emits $autocapture on click with a fingerprint and current screen", () => {
     const btn = document.createElement("button");
     btn.id = "go";
