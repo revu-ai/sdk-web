@@ -30,14 +30,21 @@ jobs:
       - name: Lint
         run: bun run lint
 
+      # Build first, on purpose. Two later steps depend on the built dist:
+      # the IIFE bundle smoke test skips itself when dist/iife/index.js is
+      # absent (and dist is gitignored, so a clean checkout has none), and
+      # the size gate measures the bundle. Building before test and types
+      # means the smoke test runs against the exact bytes we ship, and the
+      # type declarations land in dist alongside the bundles (build wipes
+      # dist on entry, so it has to run before types, not after).
+      - name: Build
+        run: bun run build
+
       - name: Type check
         run: bun run types
 
       - name: Test
         run: bun test
-
-      - name: Build
-        run: bun run build
 
       # The size budget is the contract between the SDK and its hosts:
       # cross it and the "lightweight by design" invariant is broken.

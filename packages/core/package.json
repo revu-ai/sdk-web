@@ -41,7 +41,8 @@
     "prebuild": "bun scripts/sync-version.js",
     "build": "bun scripts/build.js",
     "types": "tsc -p tsconfig.json --outDir dist",
-    "size": "size-limit"
+    "size": "size-limit",
+    "prepack": "bun run build && bun run types"
   },
   "size-limit": [
     { "name": "core (esm, raw min)",  "path": "dist/index.js",           "limit": "30 kB", "gzip": false, "brotli": false, "disablePlugins": ["@size-limit/esbuild"] },
