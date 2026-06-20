@@ -148,8 +148,8 @@ shape:
   win on collision. The engine context includes `$user_agent`,
   `$language`, `$timezone`, `$environment`, `$sdk_version`,
   `$viewport_width`, `$viewport_height`, `$screen_width`,
-  `$screen_height`, `$screen_pixel_ratio`, `$initial_referrer`, and
-  `$online`, plus `$connection_type`, `$connection_downlink_mbps`,
+  `$screen_height`, `$screen_pixel_ratio`, and `$initial_referrer`,
+  plus `$connection_type`, `$connection_downlink_mbps`,
   `$connection_rtt_ms`, and `$save_data` when the browser exposes the
   Network Information API. The example above shows a representative
   subset.
