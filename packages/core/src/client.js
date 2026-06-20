@@ -13,7 +13,7 @@ import { createStorage } from "./storage.js";
 import { Transport } from "./transport.js";
 import { VERSION } from "./version.js";
 import { Vitals } from "./vitals.js";
-import { hashUint32, nowIso, routePath, sanitizeProperties, uuid } from "./utils.js";
+import { hashUint32, nowIso, readGpc, routePath, sanitizeProperties, uuid } from "./utils.js";
 
 /**
  * Event types exempt from sampling - they must always ship so person and
@@ -38,6 +38,8 @@ export class RevuClient {
         mode: config.persistentStorage,
         cookieDomain: config.cookieDomain,
       }),
+      honorGpc: config.honorGpc,
+      gpc: readGpc(),
     });
     this.transport = new Transport({
       host: config.host,
@@ -189,6 +191,13 @@ export class RevuClient {
       properties: {
         ...this.context.build(),
         $sdk_version: VERSION,
+        // The visitor's per-category consent state at capture time. Only
+        // `analytics` gated this event into existence (a denied analytics
+        // category suppresses capture entirely above); `marketing` /
+        // `functional` ride along so the server can honor the banner choice on
+        // downstream destinations. Session-stable and tiny, so stamping every
+        // event matches how the rest of the engine context is carried.
+        $consent: this.consent.get(),
         // Stamp the sampling rate so the server can scale aggregates: a kept
         // event counts as 1/sample_rate toward volume estimates. Only on
         // events actually subject to sampling - identity events are exempt
@@ -377,5 +386,22 @@ export class RevuClient {
   /** @returns {boolean} Whether capture is currently suppressed. */
   hasOptedOut() {
     return this.consent.optedOut();
+  }
+
+  /**
+   * Merge a partial consent map over the current category state and persist it.
+   * `{ analytics: "denied" }` is equivalent to {@link optOut}; `{ analytics:
+   * "granted" }` to {@link optIn}. Only `analytics` gates capture - `marketing`
+   * and `functional` are declarative signals stamped on every event for the
+   * server to honor downstream. Unknown categories / values are ignored.
+   * @param {Record<string, "granted"|"denied">} categories
+   */
+  setConsent(categories) {
+    this.consent.set(categories);
+  }
+
+  /** @returns {Record<string, "granted"|"denied">} The current category state. */
+  getConsent() {
+    return this.consent.get();
   }
 }

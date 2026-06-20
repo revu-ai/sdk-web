@@ -179,11 +179,12 @@ shape:
   win on collision. The engine context includes `$user_agent`,
   `$language`, `$timezone`, `$environment`, `$sdk_version`,
   `$viewport_width`, `$viewport_height`, `$screen_width`,
-  `$screen_height`, `$screen_pixel_ratio`, and `$initial_referrer`,
-  plus `$connection_type`, `$connection_downlink_mbps`,
-  `$connection_rtt_ms`, and `$save_data` when the browser exposes the
-  Network Information API. The example above shows a representative
-  subset.
+  `$screen_height`, `$screen_pixel_ratio`, `$initial_referrer`, and
+  `$consent` (the per-category consent state), plus
+  `$connection_type`, `$connection_downlink_mbps`, `$connection_rtt_ms`,
+  and `$save_data` when the browser exposes the Network Information API,
+  and `$gpc` when the browser advertises a Global Privacy Control signal.
+  The example above shows a representative subset.
 
 JSDoc in `src/types.js` is the source of truth for the full type. Run
 `bun run types` from the repo root to emit the corresponding `.d.ts`.

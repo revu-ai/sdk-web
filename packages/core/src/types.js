@@ -25,7 +25,17 @@
  * @property {number} [idleTimeoutMs=30000] Milliseconds of no mouse / keyboard / scroll / touch activity before the user is considered idle. Setting to 0 disables idle detection entirely (engagement_time_ms then ticks as long as the tab is visible).
  * @property {number} [sessionTimeoutMs=1800000] How long (in ms) a session can sit idle before the next SDK construction rotates to a fresh `session_id`. Default 30 minutes. Set to 0 to disable continuation entirely so every page load gets a brand new session.
  * @property {number} [sampleRate=1] Fraction of sessions to capture, in [0, 1]. `1` captures everything (default); `0.1` keeps roughly 10% of sessions and drops the rest before they are queued, trading dashboard precision for ingest volume on high-traffic sites. The decision is session-sticky (a whole session is kept or dropped, never half), and identity events (`$identify`, `$reset`, `$alias`) are always sent so person-stitching stays correct. Kept sampled (non-identity) events carry `properties.$sample_rate` so the server can scale aggregates; identity events never carry it (they are not sampled). Out-of-range values throw at init.
+ * @property {boolean} [honorGpc=false] When true, a browser Global Privacy Control signal defaults the `analytics` consent category to denied (suppressing capture) unless the visitor has already made an explicit choice, which always wins. Default false: honoring GPC is the host's jurisdictional decision (a valid opt-out signal under CCPA/CPRA, but not the consent mechanism under GDPR), and auto-denying would silently drop data on upgrade. The GPC signal is stamped on every event as `properties.$gpc` regardless of this flag, so the server can act on it either way.
  * @property {RevuPlugin[]} [plugins]      Plugins to install during `init()`. Equivalent to calling `revu.use(plugin)` for each, but co-located with the rest of the config.
+ */
+
+/**
+ * Per-category consent state. Each known category maps to "granted" or
+ * "denied". `analytics` is the only category that gates capture (denied
+ * suppresses every event); `marketing` and `functional` are declarative
+ * signals stamped on events (`properties.$consent`) for the server to honor on
+ * downstream destinations.
+ * @typedef {Record<"analytics"|"marketing"|"functional", "granted"|"denied">} ConsentState
  */
 
 /**
@@ -42,9 +52,10 @@
  * @property {(userId: string) => void} identify  Link the anonymous visitor to a known user id.
  * @property {(authoritativeId: string) => void} alias  Join the current identity to a separate authoritative id (cross-device stitching).
  * @property {() => void} reset                   Sign-out: clear the user, rotate the session, emit `$reset`.
- * @property {() => void} optOut                  Stop all capture for this visitor and persist the choice.
- * @property {() => void} optIn                   Resume capture after a prior `optOut()` and persist the choice.
- * @property {() => boolean} hasOptedOut          Whether capture is currently suppressed.
+ * @property {() => void} optOut                  Stop all capture for this visitor and persist the choice (alias for denying the `analytics` consent category).
+ * @property {() => void} optIn                   Resume capture after a prior `optOut()` and persist the choice (alias for granting the `analytics` consent category).
+ * @property {() => boolean} hasOptedOut          Whether capture is currently suppressed (the `analytics` category is denied).
+ * @property {{ set: (categories: Record<string, "granted"|"denied">) => void, get: () => ConsentState }} consent  Category-level consent control. `set()` merges a partial category map and persists it (denying `analytics` is equivalent to `optOut()`); `get()` returns the current state. Only `analytics` gates capture; `marketing` / `functional` are stamped on events for the server to honor. Before `init()`, `set()` is a no-op and `get()` returns the all-granted default.
  * @property {() => (Promise<boolean>|undefined)} flush  Flush buffered events immediately.
  * @property {string} version                     Build version of `@revu-ai/core` baked into this bundle.
  */

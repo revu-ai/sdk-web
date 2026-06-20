@@ -13,6 +13,7 @@
 
 import { RevuClient } from "./client.js";
 import { resolveConfig } from "./config.js";
+import { defaultConsent } from "./consent.js";
 import { safe } from "./utils.js";
 import { VERSION } from "./version.js";
 
@@ -150,6 +151,38 @@ const revu = {
       onError(err);
       return false;
     }
+  },
+
+  /**
+   * Category-level consent control. The granular counterpart to the
+   * {@link revu.optOut} / {@link revu.optIn} master switch:
+   *
+   * ```js
+   * revu.consent.set({ analytics: "granted", marketing: "denied" });
+   * revu.consent.get(); // { analytics: "granted", marketing: "denied", functional: "granted" }
+   * ```
+   *
+   * `set()` merges a partial map and persists it; denying `analytics`
+   * suppresses all capture exactly like `optOut()`. `marketing` and
+   * `functional` are declarative - the SDK stamps them on every event
+   * (`properties.$consent`) for the server to honor, but does not gate on them.
+   * Before `init()`, `set()` is a no-op and `get()` returns the all-granted
+   * default. `get()` catches internally (like `hasOptedOut`) so it always
+   * returns a real state object, never `undefined`.
+   * @type {{ set: (categories: Record<string, "granted"|"denied">) => void, get: () => import("./types.js").ConsentState }}
+   */
+  consent: {
+    set: safe((categories) => client?.setConsent(categories), onError),
+    get() {
+      try {
+        return /** @type {import("./types.js").ConsentState} */ (
+          client ? client.getConsent() : defaultConsent()
+        );
+      } catch (err) {
+        onError(err);
+        return /** @type {import("./types.js").ConsentState} */ (defaultConsent());
+      }
+    },
   },
 
   /** Flush buffered events immediately. @returns {Promise<boolean>|undefined} */

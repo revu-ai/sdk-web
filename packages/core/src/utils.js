@@ -206,6 +206,25 @@ export function scrubUrl(url) {
 }
 
 /**
+ * Read the browser's Global Privacy Control signal. Returns the boolean when
+ * the property is present (a user agent that advertises GPC), or undefined
+ * when the platform does not expose it (most browsers today). The value is
+ * session-stable: it does not change inside a single page load. SSR-safe;
+ * never throws.
+ * @returns {boolean|undefined}
+ */
+export function readGpc() {
+  try {
+    if (typeof navigator === "undefined") return undefined;
+    const value = /** @type {{ globalPrivacyControl?: unknown }} */ (navigator)
+      .globalPrivacyControl;
+    return typeof value === "boolean" ? value : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
  * The current "route" path used as the screen/page identifier. Combines
  * pathname with the hash so a hash-router app (e.g. `/#/pricing`) treats each
  * hash as a distinct route, and plain anchor navigation (e.g. `#section-2`)

@@ -24,7 +24,7 @@
  * remain in their own namespace and never collide.
  */
 
-import { scrubUrl } from "./utils.js";
+import { readGpc, scrubUrl } from "./utils.js";
 
 /**
  * Build session-scoped context once, sample per-event context on every
@@ -90,6 +90,13 @@ export class Context {
         // Malformed referrer; skip the parsed host but keep the raw string.
       }
     }
+
+    // Global Privacy Control: stamped whenever the browser advertises it, so
+    // the server sees the signal regardless of whether the host opts to honor
+    // it for capture (see consent.js honorGpc). Session-stable: GPC does not
+    // change inside a single page load.
+    const gpc = readGpc();
+    if (typeof gpc === "boolean") ctx.$gpc = gpc;
 
     return ctx;
   }

@@ -94,11 +94,12 @@ require shipping a dictionary, an algorithm, or a model to the browser
 stays server-side. That is what keeps the bundle in single-digit
 kilobytes.
 
-## Opt-out
+## Consent
 
-Capture is a master switch the host controls at runtime, so a cookie
-banner routes its state through the SDK rather than wrapping every call
-in a check:
+Capture is gated on a per-category consent state the host controls at
+runtime, so a cookie banner routes its choices through the SDK rather
+than wrapping every call in a check. The simplest form is the binary
+master switch:
 
 ```js
 revu.optOut();        // stop all capture (reject / withdraw consent)
@@ -106,18 +107,47 @@ revu.optIn();         // resume capture (accept)
 revu.hasOptedOut();   // -> boolean
 ```
 
-While opted out, every interaction (autocapture, pageviews, custom
-`capture()` calls, identity events) is suppressed before an event is
-built, so nothing leaves the browser. The choice is persisted in the
-same first-party store as identity, so a reload honors it without
-re-prompting.
+For per-category control, use the consent API. There are three
+categories - `analytics`, `marketing`, and `functional` - each
+`"granted"` or `"denied"`:
 
-Opting out does not clear identity: opting back in resumes the same
-visitor. That is the right default for a consent toggle (a user who
+```js
+revu.consent.set({ analytics: "granted", marketing: "denied" });
+revu.consent.get();
+// -> { analytics: "granted", marketing: "denied", functional: "granted" }
+```
+
+Only `analytics` gates capture: while it is denied, every interaction
+(autocapture, pageviews, custom `capture()` calls, identity events) is
+suppressed before an event is built, so nothing leaves the browser.
+`optOut()` / `optIn()` are aliases for denying / granting it.
+`marketing` and `functional` are declarative: the SDK does not act on
+them, it stamps the full state on every event (`properties.$consent`) so
+the server honors the visitor's choices on the destinations downstream.
+
+The choice is persisted in the same first-party store as identity, so a
+reload honors it without re-prompting. A binary opt-out persisted by an
+earlier SDK version is read on the first load after upgrade, so a prior
+reject keeps being honored.
+
+Changing consent does not clear identity: granting again resumes the
+same visitor. That is the right default for a consent toggle (a user who
 re-accepts is the same person). Call `revu.reset()` if you instead want
 a clean break to a new anonymous visitor.
 
 For per-element opt-out, use `data-revu-mask` on the subtree.
+
+### Global Privacy Control
+
+Some browsers advertise a Global Privacy Control signal
+(`navigator.globalPrivacyControl`). The SDK always stamps it on events as
+`properties.$gpc` so the server sees it. With `honorGpc: true` (off by
+default), a GPC signal also defaults the `analytics` category to denied,
+unless the visitor has already made an explicit choice through your
+banner - an explicit choice always wins. The default is off because
+whether GPC legally requires suppression depends on your jurisdiction
+(it is a valid opt-out signal under CCPA/CPRA, but not the consent
+mechanism under GDPR), so the decision is left to you.
 
 ### Dropping locally-buffered events
 

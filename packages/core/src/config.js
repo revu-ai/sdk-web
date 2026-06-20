@@ -21,6 +21,7 @@ const DEFAULTS = {
   idleTimeoutMs: 30000,
   sessionTimeoutMs: 30 * 60 * 1000,
   sampleRate: 1,
+  honorGpc: false,
   plugins: [],
 };
 

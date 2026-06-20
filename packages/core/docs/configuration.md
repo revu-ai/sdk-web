@@ -25,6 +25,7 @@ Defaults are tuned to be the right answer for a typical product surface.
 | `maxBatch`          | `number`                                     | `50`                    | Hard cap on events per request body. Bound exists so a single network round-trip never sends an oversized payload.                                                                                                                                                  |
 | `maxQueue`          | `number`                                     | `1000`                  | Hard cap on durably-queued events. When the cap is hit, the oldest events are pruned first (recent behavior is more valuable than stale backlog).                                                                                                                   |
 | `sampleRate`        | `number`                                     | `1`                     | Fraction of sessions to capture, in `[0, 1]`. `1` keeps everything; `0.1` keeps ~10% of sessions and drops the rest before they queue, trading dashboard precision for ingest volume on high-traffic sites. Session-sticky (a whole session is kept or dropped), identity events always send (and never carry `$sample_rate`), and kept sampled events carry `$sample_rate` so the server scales aggregates. Out-of-range values throw at init. |
+| `honorGpc`          | `boolean`                                    | `false`                 | When `true`, a browser [Global Privacy Control](#consent-and-gpc) signal defaults the `analytics` consent category to denied (suppressing capture) unless the visitor has made an explicit choice. Left `false` by default: honoring GPC is a jurisdictional decision for you to make (it is a valid opt-out under CCPA/CPRA but not the consent mechanism under GDPR), and auto-denying would silently drop data on upgrade. The signal is stamped on every event as `$gpc` regardless of this flag. |
 | `debug`             | `boolean`                                    | `false`                 | Log every captured event and internal error to the console with a `[REVU]` prefix.                                                                                                                                                                                  |
 | `onEvent`           | `(event) => void`                            | `() => {}`              | Local hook called with every captured event. Useful for debug overlays, screenshot annotations, and tests.                                                                                                                                                          |
 | `plugins`           | `RevuPlugin[]`                               | `[]`                    | Plugins to install during `init()`. Equivalent to a `revu.use(plugin)` for each, but co-located with the rest of the config.                                                                                                                                        |
@@ -70,3 +71,42 @@ The session id is persisted (per `persistentStorage`) along with a
 `last_seen` timestamp; on every event the SDK touches `last_seen`
 (throttled so a chatty page does not pay a write per event), and the
 next construction reads both to decide whether to continue or rotate.
+
+## Consent and GPC
+
+Capture is gated on a per-category consent state the host controls at
+runtime, so a cookie banner routes its choices through the SDK rather
+than wrapping every call in a check. There are three categories:
+
+- **`analytics`** - the SDK's own bucket. This is the only category that
+  gates capture: while it is `"denied"`, every interaction is suppressed
+  before an event is built, so nothing leaves the browser.
+- **`marketing`** and **`functional`** - declarative. The SDK does not
+  act on them; it stamps the full consent state on every event
+  (`properties.$consent`) so the server honors the visitor's choices on
+  the destinations downstream.
+
+```js
+// Map a cookie banner's result straight through:
+revu.consent.set({ analytics: "granted", marketing: "denied" });
+
+revu.consent.get();
+// -> { analytics: "granted", marketing: "denied", functional: "granted" }
+```
+
+`revu.optOut()` / `revu.optIn()` are aliases for denying / granting the
+`analytics` category, so existing wiring keeps working. The state is
+persisted in the same first-party store as identity, and a pre-existing
+binary opt-out from an earlier SDK version is honored on upgrade.
+
+**Global Privacy Control.** Some browsers advertise a GPC signal
+(`navigator.globalPrivacyControl`). The SDK always stamps it on events as
+`$gpc` so the server sees it. With `honorGpc: true`, a GPC signal also
+defaults the `analytics` category to denied - unless the visitor has
+already made an explicit choice through your banner, which always wins.
+The default is `honorGpc: false`: whether GPC legally requires
+suppression depends on your jurisdiction, so the decision is left to you.
+
+```js
+revu.init({ apiKey: "...", honorGpc: true }); // auto-deny on a GPC signal
+```

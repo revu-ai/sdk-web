@@ -17,6 +17,7 @@ types. This page documents semantics, examples, and edge cases.
 - [`revu.alias(authoritativeId)`](#revualiasauthoritativeid)
 - [`revu.reset()`](#revureset)
 - [`revu.optOut()` / `revu.optIn()` / `revu.hasOptedOut()`](#revuoptout--revuoptin--revuhasoptedout)
+- [`revu.consent.set()` / `revu.consent.get()`](#revuconsentset--revuconsentget)
 - [`revu.flush()`](#revuflush)
 - [`revu.use(plugin)`](#revuuseplugin)
 - [`revu.version`](#revuversion)
@@ -175,6 +176,12 @@ built, so nothing leaves the browser. The choice is persisted in the
 same first-party store as identity, so a reload honors it without
 re-prompting.
 
+These are aliases for the `analytics` consent category: `optOut()` is
+`consent.set({ analytics: "denied" })` and `optIn()` is
+`consent.set({ analytics: "granted" })`. Use them for a simple binary
+banner; use [`consent.set()`](#revuconsentset--revuconsentget) when you
+need per-category control.
+
 **Behavior.**
 
 - Opting out does **not** clear identity. Opting back in resumes the same
@@ -183,6 +190,38 @@ re-prompting.
   prior consent to flush. To also discard locally-buffered events, see
   [Privacy and data](./privacy.md#dropping-locally-buffered-events).
 - `hasOptedOut()` returns `false` before `init()`.
+
+## `revu.consent.set()` / `revu.consent.get()`
+
+Per-category consent control. The SDK understands three categories -
+`analytics`, `marketing`, and `functional` - each `"granted"` or
+`"denied"`.
+
+```js
+// Map a cookie banner's result straight through (partial maps merge):
+revu.consent.set({ analytics: "granted", marketing: "denied" });
+
+revu.consent.get();
+// -> { analytics: "granted", marketing: "denied", functional: "granted" }
+```
+
+Only `analytics` gates capture: denying it suppresses every event,
+exactly like `optOut()`. `marketing` and `functional` are declarative -
+the SDK stamps the full state on every event as `properties.$consent` so
+the server can honor the visitor's choices on downstream destinations,
+but it never acts on them itself.
+
+**Behavior.**
+
+- `set()` merges a partial map over the current state and persists the
+  result in the same first-party store as identity. Unknown categories
+  and values other than `"granted"` / `"denied"` are ignored.
+- `get()` returns a copy of the current state. Before `init()`, `set()`
+  is a no-op and `get()` returns the all-granted default.
+- A pre-existing binary opt-out from an earlier SDK version is read on
+  the first load after upgrade, so a prior reject keeps being honored.
+- See [Global Privacy Control](./configuration.md#consent-and-gpc) for
+  how the `honorGpc` option feeds this state.
 
 ## `revu.flush()`
 
@@ -253,7 +292,8 @@ client.capture("event_name", { foo: "bar" });
 ```
 
 `RevuClient`'s public methods are `start`, `capture`, `identify`,
-`alias`, `reset`, `optOut`, `optIn`, `hasOptedOut`, `flush`, and `use`.
+`alias`, `reset`, `optOut`, `optIn`, `hasOptedOut`, `setConsent`,
+`getConsent`, `flush`, and `use`.
 The capture and identity methods
 mirror the singleton (the singleton calls `start()` for you inside
 `init()`); they are not wrapped with the `safe()` boundary, so a host
