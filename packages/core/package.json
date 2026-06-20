@@ -33,16 +33,20 @@
       "import": "./dist/index.js"
     }
   },
+  "unpkg": "./dist/iife/index.js",
+  "jsdelivr": "./dist/iife/index.js",
   "files": ["dist", "src"],
   "scripts": {
     "sync-version": "bun scripts/sync-version.js",
     "prebuild": "bun scripts/sync-version.js",
-    "build": "bun build ./src/index.js --outdir ./dist --format esm --target browser --sourcemap=linked --minify",
+    "build": "bun scripts/build.js",
     "types": "tsc -p tsconfig.json --outDir dist",
     "size": "size-limit"
   },
   "size-limit": [
-    { "name": "core (esm, min)", "path": "dist/index.js", "limit": "30 kB", "gzip": false, "brotli": false },
-    { "name": "core (esm, gzip)", "path": "dist/index.js", "limit": "10 kB", "gzip": true }
+    { "name": "core (esm, raw min)",  "path": "dist/index.js",           "limit": "30 kB", "gzip": false, "brotli": false, "disablePlugins": ["@size-limit/esbuild"] },
+    { "name": "core (esm, raw gzip)", "path": "dist/index.js",           "limit": "10 kB", "gzip": true,                   "disablePlugins": ["@size-limit/esbuild"] },
+    { "name": "core (iife, raw min)", "path": "dist/iife/index.js",      "limit": "32 kB", "gzip": false, "brotli": false, "disablePlugins": ["@size-limit/esbuild"] },
+    { "name": "core (iife, raw gzip)","path": "dist/iife/index.js",      "limit": "11 kB", "gzip": true,                   "disablePlugins": ["@size-limit/esbuild"] }
   ]
 }
