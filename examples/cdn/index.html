@@ -4,36 +4,44 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>REVU Web SDK - CDN install snippet</title>
+  <title>REVU Web SDK - recommended install snippet</title>
 
   <!--
-    This is the EXACT default install snippet from packages/core/docs/install.md
-    (Path 1, no stub queue). Paste it into the <head> of your site and you are
-    done. One async <script> tag plus an inline `onload` handler calling
-    `revu.init`. The bundle loads in parallel with HTML parsing and starts
-    capturing the moment it finishes loading.
+    The recommended install snippet from packages/core/docs/install.md
+    (Path 1). The inline stub queue catches any revu.x(...) call fired
+    before the SDK bundle finishes loading (tag manager calls, inline
+    onclick handlers, cookie banner consent events, early scripts) and
+    replays them once the SDK is ready. Without the stub, those calls
+    would throw because window.revu does not exist yet, and the events
+    would be silently lost.
 
     In production, src points at the public CDN:
 
-        <script
-          async
-          src="https://cdn.revu.ai/behavior"
-          onload="revu.init({ apiKey: 'revu_pk_...' })"
-        ></script>
+        <script async src="https://cdn.revu.ai/behavior"></script>
+        <script>
+          window.revu = window.revu || new Proxy({q:[]}, {
+            get: (t, m) => m in t ? t[m] : (...a) => t.q.push([m, ...a]),
+          });
+          revu.init({ apiKey: "revu_pk_..." });
+        </script>
 
-    This file swaps the public CDN host for the local CDN dev server (port
-    8787) so the example runs against `cd revu/cdn && bun run dev` without
-    edits. Replace the host with `https://cdn.revu.ai/behavior` to ship.
+    This file swaps the public CDN host for the local CDN dev server
+    (port 8787) so the example runs against `cd revu/cdn && bun run dev`
+    without edits. Replace the host with `https://cdn.revu.ai/behavior`
+    to ship.
 
-    Why the bare-product URL (`/behavior`) rather than a pinned version: the
-    shortest CDN form resolves to the latest published release, which is the
-    right default for most installs. See install.md for pinned (`/0.1.0/index.js`)
-    and floating (`/latest/index.js`) variants and when to use each.
+    Why the bare-product URL (`/behavior`) rather than a pinned version:
+    the shortest CDN form resolves to the latest published release,
+    which is the right default for most installs. See install.md for
+    pinned (`/0.1.0/index.js`) and floating (`/latest/index.js`)
+    variants and when to use each.
   -->
-  <script
-    async
-    src="http://localhost:8787/behavior"
-    onload="revu.init({
+  <script async src="http://localhost:8787/behavior"></script>
+  <script>
+    window.revu = window.revu || new Proxy({ q: [] }, {
+      get: (t, m) => m in t ? t[m] : (...a) => t.q.push([m, ...a]),
+    });
+    revu.init({
       apiKey: 'revu_pk_demo_replace_me',
       host: 'http://localhost:4000',
       debug: true,
@@ -43,8 +51,8 @@
         line.textContent = e.event_type.padEnd(20) + ' ' + e.screen;
         log.prepend(line);
       },
-    })"
-  ></script>
+    });
+  </script>
 
   <style>
     body {
@@ -95,29 +103,34 @@
 </head>
 
 <body>
-  <h1>REVU SDK - default install snippet</h1>
-  <p>This page demonstrates the <strong>simplest</strong> install pattern
-    from <code>docs/install.md</code>: one <code>&lt;script async&gt;</code>
-    tag plus an <code>onload</code> handler. The bundle is loaded from
+  <h1>REVU SDK - recommended install snippet</h1>
+  <p>This page demonstrates the recommended install pattern from
+    <code>docs/install.md</code>: an async <code>&lt;script&gt;</code>
+    tag plus an inline stub queue that buffers any
+    <code>revu.x(...)</code> call fired before the SDK bundle finishes
+    loading. The bundle is loaded from
     <code>http://localhost:8787/behavior</code> (the shortest CDN URL
     form, resolving to the latest published version).</p>
 
   <h2>The snippet</h2>
-  <pre class="snippet">&lt;script
-  async
-  src="https://cdn.revu.ai/behavior"
-  onload="revu.init({ apiKey: 'revu_pk_...' })"
-&gt;&lt;/script&gt;</pre>
+  <pre class="snippet">&lt;script async src="https://cdn.revu.ai/behavior"&gt;&lt;/script&gt;
+&lt;script&gt;
+  window.revu = window.revu || new Proxy({q:[]}, {
+    get: (t, m) =&gt; m in t ? t[m] : (...a) =&gt; t.q.push([m, ...a]),
+  });
+  revu.init({ apiKey: "revu_pk_..." });
+&lt;/script&gt;</pre>
 
-  <p class="muted">For tag managers, inline event handlers, or strict CSPs
-    where the <code>onload</code> attribute is forbidden, use the Proxy stub
-    pattern in <code>install.md</code> Path 1 (alternative). The
-    <code>examples/vanilla/</code> example demonstrates that pattern alongside
-    the rest of the SDK surface.</p>
+  <p class="muted">The stub queue makes the install bulletproof: every
+    <code>revu.x(...)</code> call - from tag managers, inline event
+    handlers, cookie banners, anywhere on the page - is captured even
+    when it fires before the SDK finishes loading. See
+    <code>examples/vanilla/</code> for a comprehensive demo of the SDK
+    surface using this same install pattern.</p>
 
   <h2>Quick autocapture test</h2>
-  <p class="muted">Click the button. The captured event stream below should
-    show an <code>$autocapture</code> entry.</p>
+  <p class="muted">Click the button. The captured event stream below
+    should show an <code>$autocapture</code> entry.</p>
   <button id="test-btn">Test button</button>
 
   <h2>Captured events</h2>

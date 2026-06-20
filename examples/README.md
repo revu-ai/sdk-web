@@ -1,13 +1,15 @@
 # Examples
 
 Runnable demos of the REVU Web SDK in real HTML pages. Both exercise the
-same built artifact (`packages/core/dist/iife/index.js`); they differ in
-how the install snippet is shaped and what surface they cover.
+same built artifact (`packages/core/dist/iife/index.js`) and both use the
+recommended stub-queue install snippet from
+[`packages/core/docs/install.md`](../packages/core/docs/install.md). They
+differ only in scope.
 
-| Example | Install pattern | What it covers |
-|---|---|---|
-| [`vanilla/`](./vanilla/index.html) | Proxy stub queue (the `install.md` Path 1 alternative for tag managers and strict CSPs) | The full SDK surface: every major event type, redaction demo with `data-revu-mask`, SPA route change, identity (identify + reset + alias), custom events, bfcache restore |
-| [`cdn/`](./cdn/index.html) | Default `<script async onload>` snippet, verbatim from [`packages/core/docs/install.md`](../packages/core/docs/install.md) | The minimal install, end-to-end through a real CDN |
+| Example | What it covers |
+|---|---|
+| [`vanilla/`](./vanilla/index.html) | The full SDK surface: every major event type, redaction demo with `data-revu-mask`, SPA route change, identity (identify + reset + alias), custom events, bfcache restore |
+| [`cdn/`](./cdn/index.html) | A minimal page that demonstrates the install snippet itself, end-to-end through a real CDN |
 
 ## Quick start: vanilla example
 

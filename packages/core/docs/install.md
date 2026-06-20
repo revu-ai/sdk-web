@@ -4,38 +4,7 @@ Two paths, pick the one that matches how your site is built.
 
 ## Path 1: CDN snippet
 
-Paste one `<script>` tag in `<head>`. The SDK loads asynchronously and starts
-capturing as soon as it finishes loading.
-
-```html
-<script
-  async
-  src="https://cdn.revu.ai/behavior"
-  onload="revu.init({ apiKey: 'revu_pk_...' })"
-></script>
-```
-
-What this does:
-
-1. The browser fetches the bundle in parallel with HTML parsing (`async`).
-2. When the script finishes loading and executing, the inline `onload`
-   handler runs and calls `revu.init(...)`.
-3. `revu.init` registers the first `$pageview`, starts the autocapture
-   listeners, and brings the SDK online.
-
-That covers the entire install for the typical case. If your only contact
-with REVU is the snippet itself and the SDK's autocapture, you're done.
-
-### When you need to call `revu.x()` from elsewhere on the page
-
-The simple snippet has one constraint: `window.revu` is undefined until the
-bundle finishes loading. If you call `revu.capture(...)`, `revu.identify(...)`,
-or any other method **before** the bundle has loaded (from a tag manager,
-from an inline event handler, from a script that runs above the snippet),
-the call throws and the event is lost.
-
-For those cases, paste this stub-queue snippet instead. It buffers every
-call into a queue that the SDK drains on load:
+Paste these tags into your `<head>`:
 
 ```html
 <script async src="https://cdn.revu.ai/behavior"></script>
@@ -47,32 +16,28 @@ call into a queue that the SDK drains on load:
 </script>
 ```
 
-How the stub works: the `Proxy` synthesizes a method for every property
-access (`revu.init`, `revu.capture`, `revu.identify`, anything you call)
-that pushes `[methodName, ...args]` onto `revu.q`. When the bundle
-loads, it reads that queue, replays each call against the real client
-in arrival order, then replaces the stub with the live singleton. The
-`m in t` check ensures `revu.q` itself returns the queue array rather
-than a synthesized method, so the drain logic can detect it.
+What this does:
 
-The stub is ~100 bytes inline and works for any future method without
-having to update the method-name list.
+1. The first tag starts fetching the SDK bundle in parallel with HTML
+   parsing (`async`). It does not block the browser.
+2. The inline `<script>` runs immediately. It installs a small `Proxy`
+   stub at `window.revu` that buffers any `revu.x(...)` call into a
+   queue (`revu.q`), then calls `revu.init(...)`, which gets queued like
+   any other call.
+3. When the bundle finishes loading, it reads the queue, replays every
+   call against the real SDK in arrival order (so the queued
+   `revu.init` actually runs, the SDK comes online, autocapture starts),
+   then replaces the stub with the live singleton. Subsequent calls go
+   straight through.
 
-Use this snippet if any of the following are true:
-
-- You integrate REVU via a tag manager (Google Tag Manager, Tealium,
-  Adobe Launch). Tag managers commonly fire calls during page load before
-  async scripts finish.
-- Inline `onclick` handlers or other inline scripts call `revu.x(...)`.
-- Your Content Security Policy forbids inline event handlers (no
-  `'unsafe-inline'`, no nonce). The queue snippet does not rely on
-  `onload`, so it works under strict CSPs.
-- You fire critical events extremely early in the page lifecycle (cookie
-  banner choice, A/B test exposure, identity from a server-rendered
-  cookie) and need every one captured.
-
-Both snippets call the same SDK; they differ only in how they handle the
-window between "snippet runs" and "SDK finishes loading."
+The stub queue is what makes the install bulletproof. Anything that
+fires between "snippet runs" and "SDK finishes loading" - a tag manager
+call, an inline `onclick="revu.capture(...)"` handler, a cookie banner
+consent event, a server-rendered identity injection, a click on a CTA
+before the page settles - is queued and replayed instead of silently
+lost. The stub is ~100 bytes inline, future-proof for any method we
+add later (the `Proxy` covers method names dynamically), and disappears
+entirely once the SDK takes over.
 
 ### Version pinning on the CDN
 
@@ -83,7 +48,7 @@ Pick the form that matches your stability needs.
 |---|---|---|---|
 | `cdn.revu.ai/behavior/1.2.3/index.js` | The exact 1.2.3 release | One year, immutable | Maximum stability; you opt into every version bump by editing the URL. |
 | `cdn.revu.ai/behavior/latest/index.js` | The newest published release | Five minutes | You want updates automatically and accept the responsibility of testing across releases. |
-| `cdn.revu.ai/behavior` | Same as `latest/index.js`, shortest form | Five minutes | Same as above, shortest URL. The snippets above use this form. |
+| `cdn.revu.ai/behavior` | Same as `latest/index.js`, shortest form | Five minutes | Same as above, shortest URL. The snippet above uses this form. |
 
 Each pinned URL is paired with `.map` for source maps. The response
 also carries a `Content-Encoding` of `br` or `gzip` when your browser
@@ -103,8 +68,13 @@ every release.
   src="https://cdn.revu.ai/behavior/1.2.3/index.js"
   integrity="sha384-..."
   crossorigin="anonymous"
-  onload="revu.init({ apiKey: 'revu_pk_...' })"
 ></script>
+<script>
+  window.revu = window.revu || new Proxy({q:[]}, {
+    get: (t, m) => m in t ? t[m] : (...a) => t.q.push([m, ...a]),
+  });
+  revu.init({ apiKey: "revu_pk_..." });
+</script>
 ```
 
 The hash for each release is in the release notes. The CDN also returns
@@ -140,7 +110,7 @@ API, and the same wire shape. Pick whichever fits your build.
 By design, the install path does not:
 
 - Set any cookies on the CDN domain. The bundle is served cookieless.
-- Block first paint. Both snippets load the bundle asynchronously.
+- Block first paint. The bundle loads asynchronously.
 - Require a build step or polyfills. The bundle targets ES2020 (Chrome
   85+, Safari 13.1+, Firefox 79+, Edge 85+), which covers ~97% of
   browsers globally without transpilation overhead.
