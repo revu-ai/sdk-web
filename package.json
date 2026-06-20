@@ -20,7 +20,8 @@
     "test": "bun test",
     "lint": "eslint \"packages/**/src/**/*.js\" \"packages/**/test/**/*.js\"",
     "format": "prettier --write \"packages/**/src/**/*.js\" \"packages/**/test/**/*.js\"",
-    "size": "bun run --filter '*' size"
+    "size": "bun run --filter '*' size",
+    "examples": "bun scripts/serve-example.js"
   },
   "devDependencies": {
     "@happy-dom/global-registrator": "^20.10.2",
