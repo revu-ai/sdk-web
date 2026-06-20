@@ -2,9 +2,13 @@
  * @file Web Vitals - LCP, INP, CLS as `$web_vital` events on page hide.
  *
  * Pure PerformanceObserver implementation; no runtime dependency on the
- * web-vitals package or anything else. The algorithm matches Google's
- * basic definitions; finer points (CLS session windows, INP p98 across
- * a corpus) are server-side concerns once enough samples exist.
+ * web-vitals package or anything else. CLS uses the spec's session-window
+ * model (the largest burst of layout shifts, not the lifetime sum) so the
+ * reported value is canonical CLS rather than an inflated total that grows
+ * unboundedly on long-lived / SPA pages. INP is reported as the worst
+ * interaction latency observed, which is the spec's definition below ~50
+ * interactions (the common case for a single page load); aggregating to a
+ * high percentile across many page loads stays a server-side concern.
  *
  * Reporting model: collect across the page's lifetime, emit each metric
  * once on terminal lifecycle (pagehide, or visibility-hidden as a mobile
@@ -37,8 +41,14 @@ export class Vitals {
     this.emit = emit;
     /** @type {number|null} Largest Contentful Paint, ms since navigation start. */
     this._lcp = null;
-    /** @type {number} Cumulative Layout Shift, dimensionless score. */
+    /** @type {number} Cumulative Layout Shift: the largest session window seen. */
     this._cls = 0;
+    /** @type {number} Running sum of the current CLS session window. */
+    this._clsWindow = 0;
+    /** @type {number} startTime (ms) of the first shift in the current window. */
+    this._clsFirstTs = 0;
+    /** @type {number} startTime (ms) of the most recent shift in the current window. */
+    this._clsPrevTs = 0;
     /** @type {number} Interaction to Next Paint, ms - worst observed event timing. */
     this._inp = 0;
     /** @type {PerformanceObserver[]} */
@@ -82,14 +92,18 @@ export class Vitals {
       { durationThreshold: 40 },
     );
 
-    // CLS: accumulate non-input layout shift values. Shifts that follow
-    // a recent user input are intentional UI changes triggered by the
-    // interaction and excluded from CLS by spec.
+    // CLS: fold non-input layout shifts into session windows and keep the
+    // largest. Shifts that follow a recent user input are intentional UI
+    // changes triggered by the interaction and excluded from CLS by spec.
     this._observe("layout-shift", (entries) => {
       for (const entry of entries) {
         const anyEntry = /** @type {any} */ (entry);
         if (anyEntry.hadRecentInput) continue;
-        if (typeof anyEntry.value === "number") this._cls += anyEntry.value;
+        if (typeof anyEntry.value !== "number") continue;
+        this._addLayoutShift(
+          anyEntry.value,
+          typeof anyEntry.startTime === "number" ? anyEntry.startTime : 0,
+        );
       }
     });
 
@@ -98,6 +112,34 @@ export class Vitals {
     document.addEventListener("visibilitychange", safe(() => {
       if (document.visibilityState === "hidden") report();
     }));
+  }
+
+  /**
+   * Fold one (already input-filtered) layout shift into the CLS
+   * session-window model and keep the largest window seen.
+   *
+   * Per the Layout Instability spec's session-window definition, a new
+   * window starts when the gap since the previous shift exceeds 1s OR the
+   * current window has spanned more than 5s. CLS is the maximum window sum,
+   * not the lifetime total - the lifetime sum overcounts badly on
+   * long-lived and single-page-app pages where shifts accrue across many
+   * unrelated interactions.
+   *
+   * @param {number} value  The shift's layout-shift score (positive).
+   * @param {number} ts     The shift's `startTime` in ms.
+   */
+  _addLayoutShift(value, ts) {
+    if (
+      this._clsWindow !== 0 &&
+      (ts - this._clsPrevTs > 1000 || ts - this._clsFirstTs > 5000)
+    ) {
+      // Gap or span exceeded: close the current window and open a new one.
+      this._clsWindow = 0;
+    }
+    if (this._clsWindow === 0) this._clsFirstTs = ts;
+    this._clsWindow += value;
+    this._clsPrevTs = ts;
+    if (this._clsWindow > this._cls) this._cls = this._clsWindow;
   }
 
   /**

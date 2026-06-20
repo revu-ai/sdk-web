@@ -115,19 +115,45 @@ describe("Vitals - terminal emission", () => {
   });
 });
 
-describe("Vitals - CLS accumulation", () => {
-  test("accumulates non-input layout-shift values into one CLS score", () => {
+describe("Vitals - CLS session windowing", () => {
+  test("shifts close in time accumulate into one window", () => {
     const { vitals, events } = makeVitals();
     vitals.start();
-    // Two shifts: one with hadRecentInput=true (excluded), one without.
-    /** @type {any} */ (vitals)._observe = () => {}; // already started; no-op for re-entry
-    // Feed values directly to mirror what the observer callback does.
-    vitals._cls += 0.05;
-    vitals._cls += 0.12;
+    vitals._addLayoutShift(0.05, 100);
+    vitals._addLayoutShift(0.12, 600); // +500ms, same window
 
     window.dispatchEvent(new Event("pagehide"));
 
-    expect(vital(events, "CLS")?.properties.value).toBe(0.17);
+    expect(vital(events, "CLS")?.properties.value).toBeCloseTo(0.17, 5);
+  });
+
+  test("a gap over 1s opens a new window; CLS is the max window, not the lifetime sum", () => {
+    const { vitals, events } = makeVitals();
+    vitals.start();
+    vitals._addLayoutShift(0.1, 0);
+    vitals._addLayoutShift(0.05, 500); // window 1 = 0.15
+    vitals._addLayoutShift(0.3, 2000); // gap 1500ms > 1s -> window 2 starts
+    vitals._addLayoutShift(0.05, 2200); // window 2 = 0.35
+
+    window.dispatchEvent(new Event("pagehide"));
+
+    // Lifetime sum would be 0.50; canonical CLS is the larger window, 0.35.
+    expect(vital(events, "CLS")?.properties.value).toBeCloseTo(0.35, 5);
+  });
+
+  test("a window spanning over 5s rolls over even without a 1s gap", () => {
+    const { vitals, events } = makeVitals();
+    vitals.start();
+    // Seven shifts of 0.1 from t=0..4800 (gaps under 1s) -> window 1 = 0.70.
+    for (let ts = 0; ts <= 4800; ts += 800) vitals._addLayoutShift(0.1, ts);
+    // t=5200 is within 1s of the previous shift but >5s from the window
+    // start, so it opens a new (smaller) window rather than extending.
+    vitals._addLayoutShift(0.2, 5200);
+
+    window.dispatchEvent(new Event("pagehide"));
+
+    // Lifetime sum would be 0.90; the max window is the first one, 0.70.
+    expect(vital(events, "CLS")?.properties.value).toBeCloseTo(0.7, 5);
   });
 });
 
