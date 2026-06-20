@@ -64,7 +64,7 @@ Out of the box, the SDK emits these without any host wiring (every event also ca
 | `$form_submit` | Form submission | `form_id`, `form_name`, `action`, `method`, `field_names[]`, `field_types[]`, `field_count` - **never values** |
 | `$file_download` | Click on a link with `download` attribute or known file extension (pdf, csv, zip, ...) | `url`, `filename`, `extension` |
 | `$outbound_link` | Click on a link whose hostname differs from `location.hostname` | `url`, `target_host` |
-| `$page_leave` | SPA route change (for the previous page) + `pagehide` (terminal) | `engagement_time_ms`, `path`, `persisted` (only on `pagehide`: bfcache vs terminal close) |
+| `$page_leave` | SPA route change (previous page), tab hidden (`visibilitychange`), and `pagehide` (terminal) | `engagement_time_ms`, `path`, `trigger` (`"navigation"` / `"hidden"` / `"pagehide"`), `max_scroll_percent`, `final_scroll_percent`, `persisted` (on `pagehide`: bfcache vs terminal close) |
 | `$tab_hidden` | `visibilitychange` to hidden | `visible_ms` (time visible since the last `$tab_visible` or pageview) |
 | `$tab_visible` | `visibilitychange` to visible | `hidden_ms` (time away) |
 | `$idle` | No mouse / keyboard / scroll / touch for `idleTimeoutMs` (default 30 s) | `active_ms` (time active before going idle) |

@@ -144,7 +144,7 @@ export class Capture {
     // Close out the previous page before starting the new one: emit a
     // $page_leave with the engagement time accumulated for the OLD route.
     if (this.lastPath !== undefined && this.lastPath !== newPath) {
-      this._emitPageLeave(this.lastPath);
+      this._emitPageLeave(this.lastPath, "navigation");
     }
 
     this.lastPath = newPath;
@@ -505,7 +505,12 @@ export class Capture {
     if (this._pageLeaveEmitted) return;
     this._pendingPersisted =
       event && typeof event.persisted === "boolean" ? event.persisted : false;
-    this._emitPageLeave(this.lastPath);
+    // The `pagehide` listener passes the event; the `visibilitychange ->
+    // hidden` path calls this with none. That distinguishes a terminal
+    // close / navigation (`pagehide`) from a tab merely being backgrounded
+    // (`hidden`), which the user may return from. Without the discriminator
+    // a dashboard counts every tab-blur as a page exit and overstates leaves.
+    this._emitPageLeave(this.lastPath, event ? "pagehide" : "hidden");
     this._pageLeaveEmitted = true;
   }
 
@@ -530,13 +535,20 @@ export class Capture {
    * engagement time for the next page. Called on SPA route change and on
    * pagehide. Engagement_time_ms is the attention layer's accumulated
    * visible-and-active time, paused for both tab-hidden and idle.
+   *
+   * `trigger` records what closed the page so the server can separate true
+   * exits from engagement checkpoints: `"navigation"` (SPA route change),
+   * `"pagehide"` (terminal close / navigation / bfcache), or `"hidden"`
+   * (tab backgrounded; the visitor may return and resume on the same path).
    * @param {string|undefined} path
+   * @param {"navigation"|"pagehide"|"hidden"} trigger
    */
-  _emitPageLeave(path) {
+  _emitPageLeave(path, trigger) {
     if (path === undefined) return;
     /** @type {Record<string, unknown>} */
     const properties = {
       path,
+      trigger,
       engagement_time_ms: this.attention.flushAndReset(),
       // Exact furthest depth reached on this page (0-100). Lets the dashboard
       // report continuous percentiles instead of bucketing into milestones.

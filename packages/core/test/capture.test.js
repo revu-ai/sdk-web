@@ -674,6 +674,37 @@ describe("Capture - page leave + engagement time", () => {
     expect(leaves).toHaveLength(1);
   });
 
+  test("$page_leave carries a trigger distinguishing how the page closed", () => {
+    // navigation: SPA route change.
+    {
+      const { cap, events } = makeCapture();
+      cap.start();
+      events.length = 0;
+      history.pushState(null, "", "/next");
+      const leave = events.find((e) => e.type === "$page_leave");
+      expect(leave?.data.properties.trigger).toBe("navigation");
+    }
+    // pagehide: terminal close / navigation / bfcache.
+    {
+      const { cap, events } = makeCapture();
+      cap.start();
+      events.length = 0;
+      window.dispatchEvent(new Event("pagehide"));
+      const leave = events.find((e) => e.type === "$page_leave");
+      expect(leave?.data.properties.trigger).toBe("pagehide");
+    }
+    // hidden: tab backgrounded (the visitor may return).
+    {
+      const { cap, events } = makeCapture();
+      cap.start();
+      events.length = 0;
+      Object.defineProperty(document, "visibilityState", { value: "hidden", configurable: true });
+      document.dispatchEvent(new Event("visibilitychange"));
+      const leave = events.find((e) => e.type === "$page_leave");
+      expect(leave?.data.properties.trigger).toBe("hidden");
+    }
+  });
+
   test("returning to foreground re-arms $page_leave for the next terminal event", () => {
     const { cap, events } = makeCapture();
     cap.start();

@@ -20,6 +20,7 @@ const DEFAULTS = {
   captureAttention: true,
   idleTimeoutMs: 30000,
   sessionTimeoutMs: 30 * 60 * 1000,
+  sampleRate: 1,
   plugins: [],
 };
 
@@ -45,7 +46,27 @@ export function resolveConfig(config) {
   const merged = { ...DEFAULTS, ...config };
   validateHost(merged.host);
   validateEnvironment(merged.environment);
+  validateSampleRate(merged.sampleRate);
   return merged;
+}
+
+/**
+ * Validate `sampleRate` is a number in [0, 1]. Out-of-range or non-numeric
+ * values are a config typo that would silently drop all events (or none in a
+ * surprising way), so fail loudly at init rather than corrupt the funnel.
+ * @param {unknown} sampleRate
+ */
+function validateSampleRate(sampleRate) {
+  if (
+    typeof sampleRate !== "number" ||
+    Number.isNaN(sampleRate) ||
+    sampleRate < 0 ||
+    sampleRate > 1
+  ) {
+    throw new Error(
+      `[REVU] init() sampleRate must be a number between 0 and 1, got ${JSON.stringify(sampleRate)}`,
+    );
+  }
 }
 
 /**

@@ -23,6 +23,23 @@ export function nowIso() {
 }
 
 /**
+ * Deterministic 32-bit string hash (FNV-1a). Stable across reloads and
+ * platforms, so a value derived from it (e.g. session-sticky sampling) makes
+ * the same decision everywhere for the same input. Not cryptographic.
+ * @param {string} str
+ * @returns {number} An unsigned 32-bit integer.
+ */
+export function hashUint32(str) {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < str.length; i++) {
+    h ^= str.charCodeAt(i);
+    // h *= 16777619, via shifts to stay in 32-bit integer math.
+    h = (h + ((h << 1) + (h << 4) + (h << 7) + (h << 8) + (h << 24))) >>> 0;
+  }
+  return h >>> 0;
+}
+
+/**
  * Wrap a function so it can NEVER throw into the host page. This is the
  * cardinal SDK invariant: an analytics SDK that breaks the host site is
  * worse than no SDK at all. Errors are swallowed and, in debug, logged.

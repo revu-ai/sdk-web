@@ -69,6 +69,16 @@ the user stopped or resumed interacting. The two are orthogonal so that
 content products and tool products can both reason about engagement
 without one model contaminating the other.
 
+A `$page_leave` fires on every `visibilitychange -> hidden`, not only on
+a true exit, so one page view can produce several `$page_leave` events
+(one per visible span) as the user tabs away and back. The `trigger`
+property separates them: `"hidden"` is a tab-blur checkpoint the visitor
+may return from, while `"pagehide"` and `"navigation"` are real
+departures. Sum `engagement_time_ms` grouped by `(session_id,
+properties.path)` for total engagement; count exits on
+`trigger != "hidden"` so backgrounding a tab is not miscounted as a page
+exit.
+
 ### Scroll depth: max + final on `$page_leave`
 
 Every `$page_leave` carries two scroll-depth scalars alongside
@@ -193,7 +203,7 @@ envelope above; the rows below describe what's distinctive about each.
 | Event | Fires when | Notable properties |
 |---|---|---|
 | `$pageview` | First load and on every SPA route change | `url`, `path`, `referrer`, `title` |
-| `$page_leave` | SPA route change, tab close, navigation, or `visibilitychange -> hidden` | `path` (the page being left), `engagement_time_ms`, `max_scroll_percent`, `final_scroll_percent`, `persisted` |
+| `$page_leave` | SPA route change, tab close, navigation, or `visibilitychange -> hidden` | `path` (the page being left), `trigger` (`"navigation"` / `"hidden"` / `"pagehide"`), `engagement_time_ms`, `max_scroll_percent`, `final_scroll_percent`, `persisted` |
 | `$page_restore` | `pageshow` with `persisted: true` (bfcache restore via Back button) | `path` |
 | `$tab_hidden` / `$tab_visible` | Visibility flips | `visible_ms` / `hidden_ms` |
 | `$idle` / `$active` | User stops or resumes interacting (gated by `idleTimeoutMs`) | `active_ms` / `idle_ms` |

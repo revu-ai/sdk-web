@@ -5,7 +5,7 @@
 
 import { describe, expect, test } from "bun:test";
 import { resolveConfig } from "../src/config.js";
-import { safe, truncate, uuid } from "../src/utils.js";
+import { hashUint32, safe, truncate, uuid } from "../src/utils.js";
 
 describe("config", () => {
   test("applies defaults over a minimal config", () => {
@@ -13,6 +13,21 @@ describe("config", () => {
     expect(c.apiKey).toBe("k");
     expect(c.autocapture).toBe(true);
     expect(c.host).toContain("revu.ai");
+    expect(c.sampleRate).toBe(1);
+  });
+
+  test("accepts a sampleRate in [0, 1]", () => {
+    expect(resolveConfig({ apiKey: "k", sampleRate: 0 }).sampleRate).toBe(0);
+    expect(resolveConfig({ apiKey: "k", sampleRate: 0.25 }).sampleRate).toBe(0.25);
+    expect(resolveConfig({ apiKey: "k", sampleRate: 1 }).sampleRate).toBe(1);
+  });
+
+  test("rejects a sampleRate outside [0, 1] or non-numeric", () => {
+    expect(() => resolveConfig({ apiKey: "k", sampleRate: 1.5 })).toThrow();
+    expect(() => resolveConfig({ apiKey: "k", sampleRate: -0.1 })).toThrow();
+    // @ts-expect-error - intentionally invalid
+    expect(() => resolveConfig({ apiKey: "k", sampleRate: "0.5" })).toThrow();
+    expect(() => resolveConfig({ apiKey: "k", sampleRate: Number.NaN })).toThrow();
   });
 
   test("throws without an apiKey", () => {
@@ -104,5 +119,17 @@ describe("utils", () => {
   test("truncate caps length", () => {
     expect(truncate("hello", 3)).toBe("hel");
     expect(truncate(undefined)).toBeUndefined();
+  });
+
+  test("hashUint32 is deterministic and an unsigned 32-bit integer", () => {
+    const a = hashUint32("session-abc");
+    expect(hashUint32("session-abc")).toBe(a); // stable for the same input
+    expect(Number.isInteger(a)).toBe(true);
+    expect(a).toBeGreaterThanOrEqual(0);
+    expect(a).toBeLessThan(2 ** 32);
+    // Different inputs should not collide for these simple cases.
+    expect(hashUint32("session-abd")).not.toBe(a);
+    // Maps into [0, 1) cleanly for sampling.
+    expect(a / 0x100000000).toBeLessThan(1);
   });
 });

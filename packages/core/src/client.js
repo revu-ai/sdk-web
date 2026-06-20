@@ -13,7 +13,14 @@ import { createStorage } from "./storage.js";
 import { Transport } from "./transport.js";
 import { VERSION } from "./version.js";
 import { Vitals } from "./vitals.js";
-import { nowIso, routePath, sanitizeProperties, uuid } from "./utils.js";
+import { hashUint32, nowIso, routePath, sanitizeProperties, uuid } from "./utils.js";
+
+/**
+ * Event types exempt from sampling - they must always ship so person and
+ * session stitching stays correct even in a dropped session. Sampling a
+ * `$identify` out would orphan every event under that user id.
+ */
+const SAMPLING_EXEMPT = new Set(["$identify", "$reset", "$alias"]);
 
 export class RevuClient {
   /** @param {import("./types.js").ResolvedConfig} config */
@@ -58,6 +65,10 @@ export class RevuClient {
     this.vitals = new Vitals(emit);
     /** @type {number} */
     this.sequence = 0;
+    /** @type {string|null} Session id the cached sampling decision was made for. */
+    this._sampleSessionId = null;
+    /** @type {boolean} Cached session-sticky sampling decision (keep vs drop). */
+    this._sampleKeep = true;
     /** @type {import("./types.js").RevuPlugin[]} Plugins registered so far. */
     this._plugins = [];
     /** @type {Set<string>} Names of plugins already installed (dedup). */
@@ -147,6 +158,10 @@ export class RevuClient {
     // event is built and nothing is enqueued. Persisted identity is left
     // untouched so opting back in resumes the same visitor.
     if (this.consent.optedOut()) return;
+    // Session-sticky sampling: a whole session is either kept or dropped, so
+    // funnels never show a hole that looks like real drop-off.
+    if (!this._shouldSample(eventType)) return;
+    const sampleRate = this.config.sampleRate;
     /** @type {import("./types.js").RevuEvent} */
     const event = {
       event_id: uuid(),
@@ -167,6 +182,14 @@ export class RevuClient {
       properties: {
         ...this.context.build(),
         $sdk_version: VERSION,
+        // Stamp the sampling rate so the server can scale aggregates: a kept
+        // event counts as 1/sample_rate toward volume estimates. Only on
+        // events actually subject to sampling - identity events are exempt
+        // (always sent), so stamping them would over-count them and, at
+        // sampleRate 0, hand the server a 1/0 scaling factor.
+        ...(sampleRate < 1 && !SAMPLING_EXEMPT.has(eventType)
+          ? { $sample_rate: sampleRate }
+          : {}),
         ...(data.properties || {}),
       },
       device_time: nowIso(),
@@ -176,6 +199,35 @@ export class RevuClient {
     // continuation window picks the same session_id back up. The identity
     // layer throttles persistence so this is cheap on chatty pages.
     this.identity.touchSession();
+  }
+
+  /**
+   * Decide whether to keep an event under the configured `sampleRate`.
+   *
+   * The decision is session-sticky: it is derived from a deterministic hash
+   * of the current `session_id`, so a single session is captured whole or
+   * skipped whole rather than torn in the middle (a half-sampled session
+   * looks like a real funnel drop-off, which is worse than less data). The
+   * result is cached per session id and recomputed when the session rotates.
+   * Identity / lifecycle events are exempt so person-stitching survives a
+   * dropped session.
+   * @param {string} eventType
+   * @returns {boolean}
+   */
+  _shouldSample(eventType) {
+    // `< 1` (rather than `>= 1`) so an unset / non-numeric rate keeps
+    // everything: a RevuClient built from a partial config (e.g. in tests)
+    // must not silently drop all events. resolveConfig() defaults this to 1.
+    if (!(this.config.sampleRate < 1)) return true;
+    if (SAMPLING_EXEMPT.has(eventType)) return true;
+    const sid = this.identity.sessionId;
+    if (sid !== this._sampleSessionId) {
+      this._sampleSessionId = sid;
+      // hashUint32 / 2^32 maps the session id into [0, 1); keep when it
+      // falls under the rate. 2^32 is 0x100000000.
+      this._sampleKeep = hashUint32(sid) / 0x100000000 < this.config.sampleRate;
+    }
+    return this._sampleKeep;
   }
 
   /**

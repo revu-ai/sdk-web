@@ -449,6 +449,78 @@ describe("RevuClient > plugin install resilience", () => {
   });
 });
 
+describe("RevuClient > sampling", () => {
+  /**
+   * Build a client at a given sampleRate. autocapture off so the only events
+   * are the ones the test drives explicitly.
+   * @param {number} sampleRate
+   */
+  function sampledClient(sampleRate) {
+    /** @type {import("../src/types.js").RevuEvent[]} */
+    const events = [];
+    const client = new RevuClient({
+      apiKey: "revu_pk_test_1234567890",
+      host: "https://api.test",
+      autocapture: false,
+      autoIdentify: false,
+      flushAt: 10_000,
+      flushIntervalMs: 60_000,
+      maxBatch: 50,
+      maxQueue: 1000,
+      debug: false,
+      sampleRate,
+      onEvent: (e) => events.push(e),
+    });
+    return { client, events };
+  }
+
+  test("sampleRate 1 keeps every event and stamps no $sample_rate", () => {
+    const { client, events } = sampledClient(1);
+    for (let i = 0; i < 10; i++) client.capture(`e${i}`);
+    expect(events.length).toBe(10);
+    expect(events.every((e) => e.properties.$sample_rate === undefined)).toBe(true);
+  });
+
+  test("sampleRate 0 drops capture/pageview events but never identity events", () => {
+    const { client, events } = sampledClient(0);
+    client.capture("custom");
+    client.record("$pageview", { properties: { path: "/x" } });
+    expect(events.length).toBe(0);
+
+    // Identity / lifecycle events are exempt so person-stitching survives.
+    client.identify("u_1");
+    client.reset();
+    const types = events.map((e) => e.event_type);
+    expect(types).toContain("$identify");
+    expect(types).toContain("$reset");
+    // Exempt events are always sent, so they must NOT carry $sample_rate -
+    // stamping it would over-count them (and is a 1/0 hazard at rate 0).
+    for (const e of events) {
+      expect(e.properties.$sample_rate).toBeUndefined();
+    }
+  });
+
+  test("the decision is session-sticky: a session is kept or dropped whole", () => {
+    // 0.5 makes the outcome depend on the session-id hash; whatever it is,
+    // every event in the one session must share it (no half-sampled session).
+    const { client, events } = sampledClient(0.5);
+    for (let i = 0; i < 40; i++) client.capture(`e${i}`);
+    expect(events.length === 0 || events.length === 40).toBe(true);
+  });
+
+  test("kept events under sampling carry properties.$sample_rate", () => {
+    // Find a session id this client keeps at 0.5 by forcing the decision,
+    // then assert the stamp. We drive the sticky cache directly so the test
+    // is deterministic regardless of the random session id.
+    const { client, events } = sampledClient(0.5);
+    client._sampleSessionId = client.identity.sessionId;
+    client._sampleKeep = true;
+    client.capture("kept");
+    const e = events.find((ev) => ev.event_type === "kept");
+    expect(e?.properties.$sample_rate).toBe(0.5);
+  });
+});
+
 describe("RevuClient > capture() hardening", () => {
   test("empty or non-string event names are ignored", () => {
     const { client, events } = makeClient();
