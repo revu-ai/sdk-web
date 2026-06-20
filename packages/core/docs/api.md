@@ -62,9 +62,22 @@ revu.capture("checkout_completed", {
 revu.capture("report_exported", { format: "pdf", pages: 12 });
 ```
 
+**Property values.** Properties are sanitized to a JSON-safe shape at the
+source before the event is queued, so a stray value can never break the
+transport:
+
+- Keep: strings, finite numbers, booleans, `null`, and nested plain
+  objects / arrays of those.
+- Dropped: functions, symbols, `BigInt`, `undefined`, and circular
+  references (the cycle is dropped, the rest of the object is kept). A
+  non-finite number (`NaN`, `Infinity`) becomes `null`, matching JSON.
+- Depth: nesting is kept up to **6 levels**; anything deeper is dropped.
+  Event properties are meant to be shallow, but this is worth knowing if
+  you pass a deeply nested object - flatten what you need before sending.
+
 **Edge cases.**
 
-- A non-string `eventType` is silently ignored.
+- An empty or non-string `eventType` is silently ignored.
 - Properties you pass always win over engine-attached context on
   collision, so a host that knows better can override anything the SDK
   auto-populates.

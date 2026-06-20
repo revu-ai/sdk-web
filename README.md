@@ -131,7 +131,7 @@ revu.capture("checkout_completed", {
 revu.capture("report_exported", { format: "pdf", pages: 12 });
 ```
 
-The first argument is the event name (snake_case is the convention, mirrors the auto-captured `$pageview` / `$autocapture` / `$rageclick` style without the leading `$`). The second argument is an optional flat object of properties; values can be strings, numbers, booleans, or null. The SDK adds identity, environment context, and the same `$` engine properties listed above, so a tracked event arrives at the server with the same shape as an autocaptured one.
+The first argument is the event name (snake_case is the convention, mirrors the auto-captured `$pageview` / `$autocapture` / `$rageclick` style without the leading `$`). The second argument is an optional object of properties; values are strings, finite numbers, booleans, `null`, or nested plain objects / arrays of those. Properties are sanitized to a JSON-safe shape at the source (unsupported values like functions, `BigInt`, or circular references are dropped, and nesting is kept to 6 levels), so a stray value can never break the transport. The SDK adds identity, environment context, and the same `$` engine properties listed above, so a tracked event arrives at the server with the same shape as an autocaptured one.
 
 When to reach for `revu.capture`:
 
