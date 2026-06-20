@@ -5,6 +5,7 @@
  */
 
 import { Attention } from "./attention.js";
+import { Attribution } from "./attribution.js";
 import { Capture } from "./capture.js";
 import { Consent } from "./consent.js";
 import { Context } from "./context.js";
@@ -33,14 +34,19 @@ export class RevuClient {
       sessionTimeoutMs: config.sessionTimeoutMs,
     });
     this.context = new Context({ environment: config.environment });
+    // One first-party store shared by the runtime-state owners (consent,
+    // attribution) so they all read and write through the same persistence
+    // mode the host configured.
+    const storage = createStorage({
+      mode: config.persistentStorage,
+      cookieDomain: config.cookieDomain,
+    });
     this.consent = new Consent({
-      storage: createStorage({
-        mode: config.persistentStorage,
-        cookieDomain: config.cookieDomain,
-      }),
+      storage,
       honorGpc: config.honorGpc,
       gpc: readGpc(),
     });
+    this.attribution = new Attribution({ storage });
     this.transport = new Transport({
       host: config.host,
       apiKey: config.apiKey,
@@ -190,6 +196,12 @@ export class RevuClient {
       // investigating regressions or rolling out fixes.
       properties: {
         ...this.context.build(),
+        // First-touch (`$initial_*`) and last-touch (`$utm_*`) campaign
+        // attribution, persisted client-side so a conversion pages or days
+        // later still carries the campaign that acquired the visitor. Only the
+        // keys actually present are stamped, so a direct visitor adds almost
+        // nothing.
+        ...this.attribution.properties(),
         $sdk_version: VERSION,
         // The visitor's per-category consent state at capture time. Only
         // `analytics` gated this event into existence (a denied analytics

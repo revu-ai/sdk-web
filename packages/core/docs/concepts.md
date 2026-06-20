@@ -183,11 +183,40 @@ shape:
   `$consent` (the per-category consent state), plus
   `$connection_type`, `$connection_downlink_mbps`, `$connection_rtt_ms`,
   and `$save_data` when the browser exposes the Network Information API,
-  and `$gpc` when the browser advertises a Global Privacy Control signal.
-  The example above shows a representative subset.
+  `$gpc` when the browser advertises a Global Privacy Control signal, and
+  the [attribution](#attribution-first-touch-and-last-touch) fields
+  (`$initial_utm_*` / `$utm_*` and friends) when a visitor arrived from a
+  campaign. The example above shows a representative subset.
 
 JSDoc in `src/types.js` is the source of truth for the full type. Run
 `bun run types` from the repo root to emit the corresponding `.d.ts`.
+
+## Attribution: first touch and last touch
+
+Campaign attribution has two halves. The server derives the immediate
+attribution of a `$pageview` by parsing its captured URL. The SDK adds
+the half the server cannot reconstruct on its own: persistence across
+the visitor's lifetime, so a conversion that happens pages or days later
+on a URL with no params still carries the campaign that drove it.
+
+The SDK persists two records (in the same first-party store as identity)
+and stamps both on every event, but only the keys actually present:
+
+- **First touch** (`$initial_*`) is written once and never overwritten:
+  the campaign that originally acquired the visitor. Fields:
+  `$initial_utm_source`, `$initial_utm_medium`, `$initial_utm_campaign`,
+  `$initial_utm_term`, `$initial_utm_content`, `$initial_gclid`,
+  `$initial_fbclid`, plus `$initial_landing_path` and `$initial_seen_at`
+  (recorded even for a direct first visit).
+- **Last touch** (`$utm_source`, `$utm_medium`, `$utm_campaign`,
+  `$utm_term`, `$utm_content`, `$gclid`, `$fbclid`) is rewritten whenever
+  a new touch occurs - a landing that carries campaign params or arrives
+  from an external referrer. Internal navigation does not overwrite it.
+
+A direct visitor with no campaign carries almost nothing (just the first
+landing path and time). Reading the stable `utm_*` / click-id keys is the
+only client-side URL parsing the SDK does; everything else (user-agent,
+geo) stays server-side.
 
 ## Interactions, never values
 

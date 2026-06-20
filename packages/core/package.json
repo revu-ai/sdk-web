@@ -45,9 +45,9 @@
     "prepack": "bun run build && bun run types"
   },
   "size-limit": [
-    { "name": "core (esm, raw min)",  "path": "dist/index.js",           "limit": "30 kB", "gzip": false, "brotli": false, "disablePlugins": ["@size-limit/esbuild"] },
-    { "name": "core (esm, raw gzip)", "path": "dist/index.js",           "limit": "10 kB", "gzip": true,                   "disablePlugins": ["@size-limit/esbuild"] },
-    { "name": "core (iife, raw min)", "path": "dist/iife/index.js",      "limit": "32 kB", "gzip": false, "brotli": false, "disablePlugins": ["@size-limit/esbuild"] },
-    { "name": "core (iife, raw gzip)","path": "dist/iife/index.js",      "limit": "11 kB", "gzip": true,                   "disablePlugins": ["@size-limit/esbuild"] }
+    { "name": "core (esm, raw min)",  "path": "dist/index.js",           "limit": "32 kB", "gzip": false, "brotli": false, "disablePlugins": ["@size-limit/esbuild"] },
+    { "name": "core (esm, raw gzip)", "path": "dist/index.js",           "limit": "12 kB", "gzip": true,                   "disablePlugins": ["@size-limit/esbuild"] },
+    { "name": "core (iife, raw min)", "path": "dist/iife/index.js",      "limit": "34 kB", "gzip": false, "brotli": false, "disablePlugins": ["@size-limit/esbuild"] },
+    { "name": "core (iife, raw gzip)","path": "dist/iife/index.js",      "limit": "13 kB", "gzip": true,                   "disablePlugins": ["@size-limit/esbuild"] }
   ]
 }

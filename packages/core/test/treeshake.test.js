@@ -47,11 +47,12 @@ describe("downstream tree-shake", () => {
     const { byteSize } = await bundleConsumer("consumer-minimal.js");
     // Generous ceiling, not a hard budget (the hard budget is the size-limit
     // gzip gate on dist/index.js). A minified-but-uncompressed consumer
-    // bundle of this fixture reaches record() (consent gate) and capture()
-    // (property sanitizer) as part of the universal core surface; if it
-    // climbs above this ceiling, something has pulled in an unexpected
-    // dependency (e.g. a subpath plugin) and warrants investigation.
-    expect(byteSize).toBeLessThan(30_000);
+    // bundle of this fixture reaches record() (consent gate, beforeSend,
+    // attribution stamping) and capture() (property sanitizer) as part of the
+    // universal core surface; if it climbs above this ceiling, something has
+    // pulled in an unexpected dependency (e.g. a subpath plugin) and warrants
+    // investigation.
+    expect(byteSize).toBeLessThan(36_000);
   });
 
   test("the minimal consumer bundle contains the public surface (sanity check)", async () => {

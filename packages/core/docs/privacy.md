@@ -158,15 +158,21 @@ identity stores:
 
 ```js
 revu.optOut();
+// Keep `revu_consent` so the opt-out itself is honored on the next load.
+const keys = [
+  "revu_event_queue",
+  "revu_anonymous_id",
+  "revu_user_id",
+  "revu_session_id",
+  "revu_session_last_seen",
+  "revu_attribution_first",
+  "revu_attribution_last",
+];
 try {
-  localStorage.removeItem("revu_event_queue");
-  localStorage.removeItem("revu_anonymous_id");
-  localStorage.removeItem("revu_user_id");
-  localStorage.removeItem("revu_session_id");
-  localStorage.removeItem("revu_session_last_seen");
+  for (const key of keys) localStorage.removeItem(key);
 } catch {}
-for (const id of ["revu_anonymous_id", "revu_user_id", "revu_session_id", "revu_session_last_seen"]) {
-  document.cookie = `${id}=; Path=/; Max-Age=0; SameSite=Lax`;
+for (const key of keys) {
+  document.cookie = `${key}=; Path=/; Max-Age=0; SameSite=Lax`;
 }
 ```
 
