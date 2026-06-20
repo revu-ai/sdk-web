@@ -16,9 +16,10 @@ on:
     types: [published]
 
 # Provenance requires id-token to mint an OIDC token at publish time.
-# `contents: read` is the default; declared explicitly for clarity.
+# `contents: write` lets the workflow attach the built CDN artifact to
+# the GitHub Release and append SRI hashes to the release body.
 permissions:
-  contents: read
+  contents: write
   id-token: write
 
 jobs:
@@ -65,14 +66,23 @@ jobs:
       - name: Lint
         run: bun run lint
 
+      # Build before types and test. build wipes dist on entry, so types
+      # (emit-declaration-only) must run after it for the .d.ts the published
+      # package's `exports.types` points at to survive to publish time. And
+      # the IIFE bundle smoke test skips when dist/iife/index.js is absent, so
+      # building first is what makes it actually exercise the exact minified
+      # bytes this job is about to publish. The publish step below uses
+      # `--ignore-scripts` so it ships THIS verified dist as-is rather than
+      # letting `prepack` rebuild it after the gates; `prepack` stays in place
+      # only as a safety net for a manual `npm publish` outside CI.
+      - name: Build
+        run: bun run build
+
       - name: Type check
         run: bun run types
 
       - name: Test
         run: bun test
-
-      - name: Build
-        run: bun run build
 
       - name: Size budget
         run: bun run size
@@ -81,8 +91,72 @@ jobs:
       # package to this workflow run and commit. The badge appears on the
       # npm package page. `--access public` is required for the first
       # publish of a scoped package; npm scopes default to private.
+      # `--ignore-scripts` skips the `prepack` rebuild so we publish exactly
+      # the dist the Build / Type check / Test / Size gates above verified -
+      # "what we tested is what we publish" - instead of regenerating the
+      # bytes after the gates have run.
       - name: Publish @revu-ai/core
         working-directory: packages/core
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: npm publish --provenance --access public
+        run: npm publish --provenance --access public --ignore-scripts
+
+      # Compute SRI hashes for the published bundles. install.md tells
+      # customers "the hash for each release is in the release notes",
+      # and the CDN exposes the same hash via the X-Content-Integrity
+      # HTTP header; both must agree, so this is the one source of
+      # truth. sha384 matches the SRI algorithm the snippet documents.
+      - name: Compute SRI hashes
+        id: sri
+        run: |
+          iife_sri="sha384-$(openssl dgst -sha384 -binary packages/core/dist/iife/index.js | openssl base64 -A)"
+          esm_sri="sha384-$(openssl dgst -sha384 -binary packages/core/dist/index.js | openssl base64 -A)"
+          echo "iife=$iife_sri" >> "$GITHUB_OUTPUT"
+          echo "esm=$esm_sri"  >> "$GITHUB_OUTPUT"
+
+      # Pack the IIFE dist tree so the cdn repo operator can download
+      # the exact bytes this workflow built and run
+      # `bun run publish-asset behavior <version> behavior-<version>`
+      # against them, instead of a fresh local build that might drift.
+      - name: Pack CDN artifact
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          tar czf "behavior-${version}.tar.gz" -C packages/core/dist iife
+
+      # Attach the CDN tarball, the individual bundles, and their source
+      # maps to the GitHub Release. The tarball is the CDN handoff; the
+      # loose files are there for spot-checking and SRI verification.
+      - name: Attach build artifacts to release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          gh release upload "$GITHUB_REF_NAME" \
+            "behavior-${version}.tar.gz" \
+            packages/core/dist/iife/index.js \
+            packages/core/dist/iife/index.js.map \
+            packages/core/dist/index.js \
+            packages/core/dist/index.js.map \
+            --clobber
+
+      # Append the SRI block to the release body, preserving whatever
+      # the human wrote. Satisfies the contract in install.md that the
+      # hash for each release lives in the release notes.
+      - name: Append SRI hashes to release notes
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          iife_sri="${{ steps.sri.outputs.iife }}"
+          esm_sri="${{ steps.sri.outputs.esm }}"
+          current=$(gh release view "$GITHUB_REF_NAME" --json body --jq .body)
+          {
+            printf '%s\n\n' "$current"
+            echo "## Integrity"
+            echo ""
+            echo "Pin the script tag with \`integrity\` when loading from the CDN:"
+            echo ""
+            echo "- IIFE (\`https://cdn.revu.ai/behavior/${version}/index.js\`): \`${iife_sri}\`"
+            echo "- ESM bundle (\`@revu-ai/core@${version}\`): \`${esm_sri}\`"
+          } > combined.md
+          gh release edit "$GITHUB_REF_NAME" --notes-file combined.md
