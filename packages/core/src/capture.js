@@ -15,7 +15,7 @@
  */
 
 import { fingerprint, closestMask } from "./fingerprint.js";
-import { routePath, safe } from "./utils.js";
+import { routePath, safe, scrubUrl } from "./utils.js";
 
 // ---------------------------------------------------------------------------
 // Tuning constants. Conservative defaults; not exposed in config yet because
@@ -165,9 +165,14 @@ export class Capture {
 
     this.emit("$pageview", {
       properties: {
-        url: location.href,
+        // Scrub credential / PII query values from the captured URL and
+        // referrer while preserving UTM and click ids (see scrubUrl).
+        url: scrubUrl(location.href),
         path: this.lastPath,
-        referrer: typeof document !== "undefined" ? document.referrer || undefined : undefined,
+        referrer:
+          typeof document !== "undefined"
+            ? scrubUrl(document.referrer) || undefined
+            : undefined,
         title: typeof document !== "undefined" ? document.title || undefined : undefined,
       },
     });
@@ -297,7 +302,7 @@ export class Capture {
       const extMatch = url.pathname.match(/\.([a-z0-9]{2,5})(?:\?.*)?$/i);
       this.emit("$file_download", {
         properties: {
-          url: url.href,
+          url: scrubUrl(url.href),
           filename: filename || undefined,
           extension: extMatch && extMatch[1] ? extMatch[1].toLowerCase() : undefined,
           path: routePath(),
@@ -315,7 +320,7 @@ export class Capture {
     ) {
       this.emit("$outbound_link", {
         properties: {
-          url: url.href,
+          url: scrubUrl(url.href),
           target_host: url.hostname,
           path: routePath(),
         },

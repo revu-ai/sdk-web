@@ -24,6 +24,8 @@
  * remain in their own namespace and never collide.
  */
 
+import { scrubUrl } from "./utils.js";
+
 /**
  * Build session-scoped context once, sample per-event context on every
  * record() call, and merge the two via {@link build}.
@@ -78,7 +80,10 @@ export class Context {
     }
 
     if (typeof document !== "undefined" && document.referrer) {
-      ctx.$initial_referrer = document.referrer;
+      // Scrub credential / PII query values from the referrer while keeping
+      // its path and host (the referrer of an auth redirect can carry a
+      // token or email in its query).
+      ctx.$initial_referrer = scrubUrl(document.referrer);
       try {
         ctx.$initial_referrer_host = new URL(document.referrer).hostname;
       } catch {

@@ -158,6 +158,54 @@ function sanitizeValue(value, seen, depth) {
 }
 
 /**
+ * Query-parameter keys whose VALUES must never leave the browser. Matched
+ * case-insensitively against whole keys or `_`/`-`-delimited segments, so
+ * `token`, `access_token`, `reset-token`, and `user_email` all hit while
+ * benign keys (`utm_source`, `gclid`, `key`, `code`, `state`) do not - that
+ * matters because the server derives campaign attribution from the URL's
+ * query, so the scrub must preserve UTM and click ids while removing
+ * credentials and PII.
+ */
+const SENSITIVE_PARAM_KEY =
+  /(^|[_-])(password|passwd|pwd|secret|token|auth|authorization|otp|ssn|apikey|api_key|access_key|client_secret|jwt|bearer|signature|sig|sessionid|session|sid|email)($|[_-])/i;
+
+/** Placeholder written in place of a redacted query value. */
+const REDACTED = "[redacted]";
+
+/**
+ * Redact the VALUES of sensitive query parameters in an absolute URL while
+ * leaving the path, fragment, and every other parameter intact. Capturing a
+ * pageview should never ship a password-reset token or an email address that
+ * happened to ride in the query string, but it must keep UTM / click-id
+ * params so server-side attribution still works - so this scrubs by key,
+ * not wholesale. Returns the input unchanged when it has no query string, is
+ * not an absolute URL, or is not a string. Never throws.
+ *
+ * @param {string} url
+ * @returns {string}
+ */
+export function scrubUrl(url) {
+  if (typeof url !== "string" || url.length === 0) return url;
+  try {
+    const parsed = new URL(url);
+    if (!parsed.search) return url;
+    let changed = false;
+    // Snapshot keys before mutating; set() collapses duplicates, which is
+    // fine for the credential-bearing params we target.
+    for (const key of [...parsed.searchParams.keys()]) {
+      if (SENSITIVE_PARAM_KEY.test(key)) {
+        parsed.searchParams.set(key, REDACTED);
+        changed = true;
+      }
+    }
+    return changed ? parsed.toString() : url;
+  } catch {
+    // Relative or malformed URL: nothing safe to parse, leave it as-is.
+    return url;
+  }
+}
+
+/**
  * The current "route" path used as the screen/page identifier. Combines
  * pathname with the hash so a hash-router app (e.g. `/#/pricing`) treats each
  * hash as a distinct route, and plain anchor navigation (e.g. `#section-2`)

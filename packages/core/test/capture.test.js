@@ -128,6 +128,22 @@ describe("Capture", () => {
     expect(ref === undefined || typeof ref === "string").toBe(true);
   });
 
+  test("$pageview url redacts sensitive query values but keeps attribution params", () => {
+    history.replaceState(null, "", "/welcome?token=secret123&utm_source=newsletter&page=2");
+    const { cap, events } = makeCapture();
+    cap.start();
+
+    const pv = pageviews(events)[0];
+    expect(pv).toBeDefined();
+    const url = /** @type {string} */ (pv.data.properties.url);
+    expect(url).not.toContain("secret123"); // token value never leaves the browser
+    expect(url).toContain("redacted");
+    expect(url).toContain("utm_source=newsletter"); // server-side attribution intact
+    expect(url).toContain("page=2");
+    // The route identity (path/screen) is the pathname, query-free as before.
+    expect(pv.data.properties.path).toBe("/welcome");
+  });
+
   test("emits $autocapture on click with a fingerprint and current screen", () => {
     const btn = document.createElement("button");
     btn.id = "go";

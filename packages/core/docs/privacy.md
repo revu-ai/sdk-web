@@ -54,6 +54,26 @@ honored:
 The attribute also crosses Shadow DOM boundaries: a `data-revu-mask` on
 a custom element's host applies to every element in its shadow tree.
 
+## URLs and query strings
+
+Captured URLs (the `$pageview` `url`, the referrer, and `$outbound_link` /
+`$file_download` targets) routinely carry secrets in their query string:
+a password-reset token, an OAuth code, an email address in `?email=`. The
+SDK redacts the **values** of sensitive query parameters at the source,
+replacing them with `[redacted]` before the event is built.
+
+The redaction is by parameter name, not wholesale, because the server
+derives campaign attribution (UTM, click ids) from the captured URL. So
+`utm_source`, `utm_medium`, `gclid`, `fbclid`, and other attribution and
+benign params are preserved, while `token`, `password`, `secret`, `auth`,
+`api_key`, `session`, `email`, and similar credential / PII keys (matched
+case-insensitively, including `_`/`-`-delimited variants like
+`access_token` and `user_email`) have their values stripped.
+
+This is redaction at source, not a toggle: there is no option to capture
+raw query values. The page identity (`screen` / `path`) is the pathname
+plus hash and never includes the query string at all.
+
 ## What the SDK does not parse client-side
 
 By design, several categories of work live server-side:

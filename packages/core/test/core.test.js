@@ -5,7 +5,7 @@
 
 import { describe, expect, test } from "bun:test";
 import { resolveConfig } from "../src/config.js";
-import { hashUint32, safe, truncate, uuid } from "../src/utils.js";
+import { hashUint32, safe, scrubUrl, truncate, uuid } from "../src/utils.js";
 
 describe("config", () => {
   test("applies defaults over a minimal config", () => {
@@ -119,6 +119,38 @@ describe("utils", () => {
   test("truncate caps length", () => {
     expect(truncate("hello", 3)).toBe("hel");
     expect(truncate(undefined)).toBeUndefined();
+  });
+
+  test("scrubUrl redacts credential / PII params but preserves attribution", () => {
+    const out = scrubUrl(
+      "https://app.example.com/reset?token=abc123&utm_source=newsletter&gclid=xyz&page=2#section",
+    );
+    expect(out).not.toContain("abc123"); // token value gone
+    expect(out).toContain("token=%5Bredacted%5D"); // replaced, not removed
+    expect(out).toContain("utm_source=newsletter"); // attribution preserved
+    expect(out).toContain("gclid=xyz"); // click id preserved
+    expect(out).toContain("page=2"); // benign param preserved
+    expect(out).toContain("#section"); // fragment preserved
+    expect(out).toContain("/reset"); // path preserved
+  });
+
+  test("scrubUrl matches sensitive keys across delimiter boundaries and casing", () => {
+    for (const key of ["access_token", "Reset-Token", "user_email", "PASSWORD", "client_secret"]) {
+      const out = scrubUrl(`https://x.test/?${key}=leak`);
+      expect(out).not.toContain("leak");
+    }
+    // Benign keys that merely contain a fragment of a sensitive word stay put.
+    for (const url of ["https://x.test/?key=ok", "https://x.test/?code=ok", "https://x.test/?state=ok"]) {
+      expect(scrubUrl(url)).toContain("=ok");
+    }
+  });
+
+  test("scrubUrl leaves query-less, relative, and non-string inputs unchanged", () => {
+    expect(scrubUrl("https://x.test/path")).toBe("https://x.test/path");
+    expect(scrubUrl("/relative?token=abc")).toBe("/relative?token=abc"); // not absolute, left as-is
+    expect(scrubUrl("")).toBe("");
+    // @ts-expect-error - intentionally non-string
+    expect(scrubUrl(null)).toBe(null);
   });
 
   test("hashUint32 is deterministic and an unsigned 32-bit integer", () => {
