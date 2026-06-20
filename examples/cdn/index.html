@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>REVU Web SDK - CDN install snippet</title>
+
+  <!--
+    This is the EXACT default install snippet from packages/core/docs/install.md
+    (Path 1, no stub queue). Paste it into the <head> of your site and you are
+    done. One async <script> tag plus an inline `onload` handler calling
+    `revu.init`. The bundle loads in parallel with HTML parsing and starts
+    capturing the moment it finishes loading.
+
+    In production, src points at the public CDN:
+
+        <script
+          async
+          src="https://cdn.revu.ai/behavior"
+          onload="revu.init({ apiKey: 'revu_pk_...' })"
+        ></script>
+
+    This file swaps the public CDN host for the local CDN dev server (port
+    8787) so the example runs against `cd revu/cdn && bun run dev` without
+    edits. Replace the host with `https://cdn.revu.ai/behavior` to ship.
+
+    Why the bare-product URL (`/behavior`) rather than a pinned version: the
+    shortest CDN form resolves to the latest published release, which is the
+    right default for most installs. See install.md for pinned (`/0.1.0/index.js`)
+    and floating (`/latest/index.js`) variants and when to use each.
+  -->
+  <script
+    async
+    src="http://localhost:8787/behavior"
+    onload="revu.init({
+      apiKey: 'revu_pk_demo_replace_me',
+      host: 'http://localhost:4000',
+      debug: true,
+      onEvent: e => {
+        const log = document.getElementById('log');
+        const line = document.createElement('div');
+        line.textContent = e.event_type.padEnd(20) + ' ' + e.screen;
+        log.prepend(line);
+      },
+    })"
+  ></script>
+
+  <style>
+    body {
+      font: 15px/1.5 system-ui, sans-serif;
+      margin: 2rem;
+      max-width: 760px;
+    }
+
+    h2 {
+      margin-top: 1.75rem;
+    }
+
+    button,
+    a.link {
+      padding: .5rem 1rem;
+      margin: .25rem;
+      display: inline-block;
+    }
+
+    .muted {
+      color: #888;
+      font-size: 13px;
+    }
+
+    pre,
+    code {
+      font-family: ui-monospace, monospace;
+    }
+
+    pre.snippet {
+      background: #f6f6f8;
+      padding: 1rem;
+      border-radius: 8px;
+      font-size: 13px;
+      overflow-x: auto;
+    }
+
+    #log {
+      background: #0b0b0f;
+      color: #b9a4ff;
+      padding: 1rem;
+      border-radius: 8px;
+      font: 12px/1.6 ui-monospace, monospace;
+      max-height: 360px;
+      overflow: auto;
+    }
+  </style>
+</head>
+
+<body>
+  <h1>REVU SDK - default install snippet</h1>
+  <p>This page demonstrates the <strong>simplest</strong> install pattern
+    from <code>docs/install.md</code>: one <code>&lt;script async&gt;</code>
+    tag plus an <code>onload</code> handler. The bundle is loaded from
+    <code>http://localhost:8787/behavior</code> (the shortest CDN URL
+    form, resolving to the latest published version).</p>
+
+  <h2>The snippet</h2>
+  <pre class="snippet">&lt;script
+  async
+  src="https://cdn.revu.ai/behavior"
+  onload="revu.init({ apiKey: 'revu_pk_...' })"
+&gt;&lt;/script&gt;</pre>
+
+  <p class="muted">For tag managers, inline event handlers, or strict CSPs
+    where the <code>onload</code> attribute is forbidden, use the Proxy stub
+    pattern in <code>install.md</code> Path 1 (alternative). The
+    <code>examples/vanilla/</code> example demonstrates that pattern alongside
+    the rest of the SDK surface.</p>
+
+  <h2>Quick autocapture test</h2>
+  <p class="muted">Click the button. The captured event stream below should
+    show an <code>$autocapture</code> entry.</p>
+  <button id="test-btn">Test button</button>
+
+  <h2>Captured events</h2>
+  <div id="log"></div>
+</body>
+
+</html>

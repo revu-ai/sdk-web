@@ -5,6 +5,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>REVU Web SDK - example</title>
+  <script async src="../../packages/core/dist/iife/index.js"></script>
   <style>
     body {
       font: 15px/1.5 system-ui, sans-serif;
@@ -49,6 +50,14 @@
       font-size: 13px;
     }
 
+    .mask-box {
+      display: inline-block;
+      padding: .15rem;
+      border: 1px dashed #c33;
+      border-radius: 6px;
+      vertical-align: middle;
+    }
+
     #log {
       background: #0b0b0f;
       color: #b9a4ff;
@@ -78,9 +87,9 @@
 
   <h2>Identity</h2>
   <p class="muted">
-    The SDK auto-assigns a persistent <code>userId</code> on first visit. Call
-    <code>revu.identify(realId)</code> on login to replace it, <code>revu.reset()</code>
-    on logout to rotate. Both emit <code>$identify</code> / <code>$reset</code>.
+    The SDK auto-assigns a persistent <code>userId</code> on first visit. On login, call
+    <code>revu.identify(realId)</code> to replace it (emits <code>$identify</code>); on logout,
+    <code>revu.reset()</code> rotates to a fresh anonymous id (emits <code>$reset</code>).
   </p>
   <label>
     User id <input id="user-id" type="text" placeholder="user-123" value="user-123" />
@@ -89,12 +98,21 @@
   <button id="reset">Reset</button>
   <p class="muted">Current user: <span id="current-user">(none)</span></p>
 
+  <p class="muted">
+    When a previously-anonymous visitor signs up, <code>revu.alias(authoritativeId)</code>
+    merges the current anonymous and user ids under one authoritative id (emits <code>$alias</code>).
+  </p>
+  <label>
+    Authoritative id <input id="alias-id" type="text" value="auth-456" />
+  </label>
+  <button id="alias">Alias</button>
+
   <h2>Form submit</h2>
   <p class="muted">
     Submits emit <code>$form_submit</code> with field <em>metadata only</em>:
     <code>field_names</code>, <code>field_types</code>, <code>field_count</code>.
-    <strong>Values are never read.</strong> Add <code>data-revu-mask</code> to any element
-    to opt out of even the field names.
+    <strong>Values are never read.</strong> Changes to a control emit <code>$change</code> with the
+    control type (and <code>checked</code> for checkboxes/radios), never the entered value.
   </p>
   <form id="contact-form" onsubmit="event.preventDefault();">
     <label>Name <input name="name" type="text" placeholder="Ada Lovelace" /></label>
@@ -102,6 +120,27 @@
     <label>Company <input name="company" type="text" placeholder="REVU" /></label>
     <button type="submit">Submit</button>
   </form>
+
+  <h2>Right-click</h2>
+  <p class="muted">
+    Right-click the target to emit <code>$rightclick</code> with a fingerprint of the
+    target element. Useful for tracking context-menu exposure and "open in new tab"
+    intent.
+  </p>
+  <button id="rightclick-target">Right-click me</button>
+
+  <h2>Redaction with <code>data-revu-mask</code></h2>
+  <p class="muted">
+    Any element inside a <code>data-revu-mask</code> subtree is opted out of fingerprinting:
+    the captured event keeps the tag, role, and a fragile selector, but drops
+    <code>text</code>, <code>aria-label</code>, and <code>title</code>. Click both buttons
+    below and compare the rows in the event stream: the unmasked one's
+    <code>fingerprint.text</code> reads "Visible label"; the masked one's is absent.
+  </p>
+  <button id="unmasked">Visible label (unmasked)</button>
+  <span class="mask-box" data-revu-mask title="data-revu-mask">
+    <button id="masked">Sensitive label (masked)</button>
+  </span>
 
   <h2>Outbound + download links</h2>
   <p class="muted">
@@ -111,6 +150,17 @@
   <a class="link" href="https://example.com" target="_blank" rel="noopener noreferrer" id="outbound">External link
     (example.com)</a>
   <a class="link" href="#" download="sample.txt" id="download">Download sample.txt</a>
+
+  <h2>bfcache restore</h2>
+  <p class="muted">
+    When the browser restores this page from the back-forward cache (you navigate away in the
+    same tab, then press Back), the SDK emits <code>$page_restore</code>. This lets the server
+    distinguish a fresh page render from a cached restoration for engagement metrics. Click the
+    link below, then use the browser's Back button to return; the stream should add a
+    <code>$page_restore</code> row.
+  </p>
+  <a class="link" href="https://example.com" id="bfcache-test">Navigate away (same tab) - press
+    Back to test $page_restore</a>
 
   <h2>Custom events</h2>
   <p class="muted">
@@ -123,9 +173,10 @@
   <h2>Captured events</h2>
   <div id="log"></div>
 
-  <script type="module">
-    // Import straight from source - no build step (vanilla JS ESM).
-    import revu from "../../packages/core/src/index.js";
+  <script>
+    window.revu = window.revu || new Proxy({ q: [] }, {
+      get: (t, m) => m in t ? t[m] : (...a) => t.q.push([m, ...a]),
+    });
 
     const log = document.getElementById("log");
     const currentUser = document.getElementById("current-user");
@@ -165,7 +216,10 @@
 
     // Identity demos. identify() replaces the auto-assigned userId with
     // the host's real id; reset() rotates to a fresh auto id and emits
-    // $reset so the server can close the identified session.
+    // $reset so the server can close the identified session. alias()
+    // merges the current anonymous and user ids under one authoritative
+    // id when a previously-anonymous visitor signs up; the server uses
+    // the alias to stitch pre- and post-signup activity into one identity.
     document.getElementById("identify").addEventListener("click", () => {
       const id = document.getElementById("user-id").value.trim();
       if (!id) return;
@@ -175,6 +229,11 @@
     document.getElementById("reset").addEventListener("click", () => {
       revu.reset();
       currentUser.textContent = "(none)";
+    });
+    document.getElementById("alias").addEventListener("click", () => {
+      const id = document.getElementById("alias-id").value.trim();
+      if (!id) return;
+      revu.alias(id);
     });
 
     // Custom event demos. revu.capture(name, properties?) sends a named
