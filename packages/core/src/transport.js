@@ -121,7 +121,15 @@ export class Transport {
   enqueue(event) {
     this.queue.add(event);
     if (this.options.debug) console.debug("[REVU] event", event);
-    this.options.onEvent(event);
+    // `onEvent` is host-supplied and runs on the autocapture hot path, which
+    // is not itself `safe()`-wrapped. Guard it so a throwing hook cannot
+    // propagate out of a DOM listener into the host (cardinal invariant); log
+    // it in debug so the host can still see their own hook misbehaving.
+    try {
+      this.options.onEvent(event);
+    } catch (err) {
+      if (this.options.debug) console.error("[REVU] onEvent threw", err);
+    }
     if (this.queue.size() >= this.options.flushAt) this.flush();
   }
 

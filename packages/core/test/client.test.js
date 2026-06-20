@@ -389,6 +389,66 @@ describe("RevuClient > plugins", () => {
   });
 });
 
+describe("RevuClient > plugin install resilience", () => {
+  test("a throwing plugin does not abort start(), later plugins, or pagehide flush", () => {
+    const { client } = makeClient();
+    let goodInstalled = false;
+    let flushWired = false;
+    const realInstallFlush = client.transport.installPageHideFlush.bind(client.transport);
+    client.transport.installPageHideFlush = () => {
+      flushWired = true;
+      realInstallFlush();
+    };
+
+    client.use({
+      name: "bad",
+      install() {
+        throw new Error("boom");
+      },
+    });
+    client.use({
+      name: "good",
+      install() {
+        goodInstalled = true;
+      },
+    });
+
+    expect(() => client.start()).not.toThrow();
+    expect(goodInstalled).toBe(true); // a sibling plugin still installs
+    expect(flushWired).toBe(true); // terminal flush still wired (no silent data loss)
+    expect(client._started).toBe(true);
+    // The failed plugin is not marked installed, so it can be retried.
+    expect(client._installed.has("bad")).toBe(false);
+    expect(client._installed.has("good")).toBe(true);
+
+    clearInterval(client.transport.timer ?? undefined);
+  });
+
+  test("a plugin that threw can be retried by re-registering after start()", () => {
+    const { client } = makeClient();
+    client.start();
+
+    let attempts = 0;
+    const flaky = {
+      name: "flaky",
+      install() {
+        attempts++;
+        if (attempts === 1) throw new Error("first attempt fails");
+      },
+    };
+
+    client.use(flaky); // installs immediately (already started); throws, not marked
+    expect(attempts).toBe(1);
+    expect(client._installed.has("flaky")).toBe(false);
+
+    client.use(flaky); // retry succeeds and marks installed
+    expect(attempts).toBe(2);
+    expect(client._installed.has("flaky")).toBe(true);
+
+    clearInterval(client.transport.timer ?? undefined);
+  });
+});
+
 describe("RevuClient > capture() hardening", () => {
   test("empty or non-string event names are ignored", () => {
     const { client, events } = makeClient();

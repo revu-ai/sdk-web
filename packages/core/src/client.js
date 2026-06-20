@@ -112,16 +112,29 @@ export class RevuClient {
    * minimum a plugin needs to emit events through the standard pipeline
    * (identity + context + transport) while reading the current identity,
    * environment context, and resolved config.
+   *
+   * A throwing `install()` is contained here so one bad plugin cannot abort
+   * the rest of `start()` - critically, it must not stop the terminal
+   * pagehide flush (installed after the plugin loop) from being wired, which
+   * would silently drop every session's final batch. The plugin is marked
+   * installed only on success, so a host that re-registers it after fixing
+   * the error gets a real retry rather than a permanent no-op.
    * @param {import("./types.js").RevuPlugin} plugin
    */
   _installPlugin(plugin) {
-    this._installed.add(plugin.name);
-    plugin.install({
-      record: (type, data) => this.record(type, data),
-      identity: this.identity,
-      context: this.context,
-      config: this.config,
-    });
+    try {
+      plugin.install({
+        record: (type, data) => this.record(type, data),
+        identity: this.identity,
+        context: this.context,
+        config: this.config,
+      });
+      this._installed.add(plugin.name);
+    } catch (err) {
+      if (this.config.debug) {
+        console.error(`[REVU] plugin "${plugin.name}" failed to install`, err);
+      }
+    }
   }
 
   /**

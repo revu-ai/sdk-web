@@ -15,7 +15,7 @@
  */
 
 import { fingerprint, closestMask } from "./fingerprint.js";
-import { routePath } from "./utils.js";
+import { routePath, safe } from "./utils.js";
 
 // ---------------------------------------------------------------------------
 // Tuning constants. Conservative defaults; not exposed in config yet because
@@ -91,15 +91,18 @@ export class Capture {
 
     // Capture-phase listeners so we observe interactions even when the
     // host stops propagation at a lower handler. `passive` on scroll so
-    // we never block the browser's scroll thread.
-    document.addEventListener("click", (e) => this.onClick(e), { capture: true });
-    document.addEventListener("contextmenu", (e) => this.onContextMenu(e), { capture: true });
-    document.addEventListener("submit", (e) => this.onSubmit(e), { capture: true });
-    document.addEventListener("change", (e) => this.onChange(e), { capture: true });
+    // we never block the browser's scroll thread. Every listener is wrapped
+    // in `safe()` so a throw inside a handler (an exotic DOM node, a
+    // host-monkeypatched API) is swallowed instead of propagating out of the
+    // SDK's listener into the host's event dispatch (cardinal invariant).
+    document.addEventListener("click", safe((e) => this.onClick(e)), { capture: true });
+    document.addEventListener("contextmenu", safe((e) => this.onContextMenu(e)), { capture: true });
+    document.addEventListener("submit", safe((e) => this.onSubmit(e)), { capture: true });
+    document.addEventListener("change", safe((e) => this.onChange(e)), { capture: true });
 
     if (typeof window !== "undefined") {
-      window.addEventListener("scroll", () => this.onScroll(), { passive: true });
-      window.addEventListener("resize", () => this.onResize());
+      window.addEventListener("scroll", safe(() => this.onScroll()), { passive: true });
+      window.addEventListener("resize", safe(() => this.onResize()));
       // Terminal signal for $page_leave. We listen on BOTH `pagehide` and
       // `visibilitychange -> hidden` and dedupe, because:
       //   - On desktop, `pagehide` fires reliably on tab close / navigation.
@@ -110,17 +113,17 @@ export class Capture {
       // unreliable on mobile generally). The `_pageLeaveEmitted` flag is
       // reset on `visibilitychange -> visible` so a foregrounded page that
       // navigates again later still emits the next $page_leave correctly.
-      window.addEventListener("pagehide", (e) => this.onPageHide(e));
+      window.addEventListener("pagehide", safe((e) => this.onPageHide(e)));
       // bfcache restore: pageshow with persisted=true means the user came
       // back via the Back button to a parked page, not a fresh load. A
       // dashboard query that conflates the two undercounts genuine new
       // navigations and overcounts return visits.
-      window.addEventListener("pageshow", (e) => this.onPageShow(e));
+      window.addEventListener("pageshow", safe((e) => this.onPageShow(e)));
       if (typeof document !== "undefined") {
-        document.addEventListener("visibilitychange", () => {
+        document.addEventListener("visibilitychange", safe(() => {
           if (document.visibilityState === "hidden") this.onPageHide();
           else if (document.visibilityState === "visible") this._pageLeaveEmitted = false;
-        });
+        }));
       }
       this._lastViewport = {
         w: typeof window.innerWidth === "number" ? window.innerWidth : 0,
@@ -179,9 +182,12 @@ export class Capture {
    */
   installSpaNavigation() {
     if (typeof history === "undefined" || typeof addEventListener !== "function") return;
-    const fire = () => {
+    // `safe()` matters most here: `fire` runs synchronously inside our
+    // `pushState` / `replaceState` wrappers, so an unguarded throw would
+    // surface in the host's own navigation call, not just a listener.
+    const fire = safe(() => {
       if (routePath() !== this.lastPath) this.capturePageview();
-    };
+    });
     for (const method of /** @type {const} */ (["pushState", "replaceState"])) {
       const original = history[method];
       history[method] = function patched(/** @type {any[]} */ ...args) {

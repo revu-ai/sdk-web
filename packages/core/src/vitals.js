@@ -19,6 +19,8 @@
  * `captureWebVitals: false`.
  */
 
+import { safe } from "./utils.js";
+
 /**
  * @callback EmitFn
  * @param {string} eventType
@@ -91,11 +93,11 @@ export class Vitals {
       }
     });
 
-    const report = () => this._report();
+    const report = safe(() => this._report());
     window.addEventListener("pagehide", report);
-    document.addEventListener("visibilitychange", () => {
+    document.addEventListener("visibilitychange", safe(() => {
       if (document.visibilityState === "hidden") report();
-    });
+    }));
   }
 
   /**
@@ -110,9 +112,9 @@ export class Vitals {
    */
   _observe(type, callback, options = {}) {
     try {
-      const observer = new PerformanceObserver((list) => {
-        callback(list.getEntries());
-      });
+      const observer = new PerformanceObserver(
+        safe((list) => callback(list.getEntries())),
+      );
       observer.observe(
         /** @type {any} */ ({ type, buffered: true, ...options }),
       );

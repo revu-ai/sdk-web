@@ -30,6 +30,8 @@
  * are gated by config.
  */
 
+import { safe } from "./utils.js";
+
 const ACTIVITY_EVENTS = /** @type {const} */ ([
   "mousemove",
   "keydown",
@@ -94,9 +96,11 @@ export class Attention {
   start() {
     if (typeof document === "undefined") return;
     this._seedFromCurrentVisibility();
-    document.addEventListener("visibilitychange", () => this.onVisibilityChange());
+    // Listeners wrapped in `safe()` so a handler throw never propagates into
+    // the host's event dispatch (cardinal invariant).
+    document.addEventListener("visibilitychange", safe(() => this.onVisibilityChange()));
     if (this.idleTimeoutMs > 0) {
-      const handler = () => this.onActivity();
+      const handler = safe(() => this.onActivity());
       for (const type of ACTIVITY_EVENTS) {
         document.addEventListener(type, handler, { passive: true, capture: true });
       }

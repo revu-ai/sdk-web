@@ -83,6 +83,18 @@ describe("Transport", () => {
     expect(onEvent).toHaveBeenCalledTimes(1);
   });
 
+  test("a throwing onEvent never propagates and the event still queues", () => {
+    // onEvent is host-supplied and runs on the autocapture hot path, which is
+    // not itself safe()-wrapped; a throw here must not escape the SDK.
+    const { t } = makeTransport({
+      onEvent: () => {
+        throw new Error("host hook bug");
+      },
+    });
+    expect(() => t.enqueue(makeEvent(1))).not.toThrow();
+    expect(t.queue.size()).toBe(1);
+  });
+
   test("flush sends a batch and commits on 2xx", async () => {
     const fetchMock = mockFetch(() => Promise.resolve(new Response("", { status: 200 })));
     const { t } = makeTransport();
