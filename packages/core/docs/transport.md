@@ -10,7 +10,8 @@ retrying transport, and two terminal flush paths for unload.
 
 - **Endpoint.** `POST ${host}/v1/behavior/events`. One endpoint, one
   path; a single `connect-src` entry covers every request the SDK
-  makes.
+  makes. `host` defaults to `https://api.revu.ai`; point it at your own
+  domain for [first-party ingest](./first-party-ingest.md).
 - **Body.** JSON with `{ api_key, batch }`, content type
   `application/json`.
 - **Method.** `fetch` with `keepalive: true` while the page is live;

@@ -49,6 +49,9 @@ them, not front-to-back reading.
 - **[Transport and offline](./transport.md)** - the ingest endpoint,
   flush triggers, the durable localStorage queue, retry and backoff,
   and the dual-signal terminal flush that makes mobile Safari reliable.
+- **[First-party ingest](./first-party-ingest.md)** - route events
+  through your own domain for first-party data completeness, with
+  copy-paste reverse-proxy recipes (Cloudflare, nginx, Caddy, Next.js).
 
 ### Extending and operating the SDK
 
