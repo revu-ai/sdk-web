@@ -72,12 +72,28 @@ without one model contaminating the other.
 A `$page_leave` fires on every `visibilitychange -> hidden`, not only on
 a true exit, so one page view can produce several `$page_leave` events
 (one per visible span) as the user tabs away and back. The `trigger`
-property separates them: `"hidden"` is a tab-blur checkpoint the visitor
-may return from, while `"pagehide"` and `"navigation"` are real
-departures. Sum `engagement_time_ms` grouped by `(session_id,
-properties.path)` for total engagement; count exits on
-`trigger != "hidden"` so backgrounding a tab is not miscounted as a page
-exit.
+property says what the SDK knew at emit time:
+
+- `"navigation"` - an SPA route change closed the previous page. A
+  transition, not an exit.
+- `"pagehide"` - the definitive terminal signal fired (tab close,
+  navigation, bfcache). The page is gone.
+- `"hidden"` - the tab was backgrounded. The SDK cannot yet tell a
+  blur from a close: on a real desktop close `visibilitychange ->
+  hidden` fires *before* `pagehide`, so a `"hidden"` checkpoint is
+  emitted first and then upgraded by a following `"pagehide"`. On
+  mobile, where `pagehide` is unreliable, a `"hidden"` with no
+  upgrade is often the only signal a terminal close ever produces.
+
+Engagement is banked on the first emit for a span, so a `"pagehide"`
+that upgrades a `"hidden"` carries ~0 additional `engagement_time_ms`.
+
+For the server: sum `engagement_time_ms` grouped by `(session_id,
+properties.path)` for total engagement (the upgrade's 0 is a no-op).
+Count an exit when a span ends in `"pagehide"`, OR ends in `"hidden"`
+with no subsequent activity on that `session_id` (the page was left and
+never resumed) - do not treat every `"hidden"` as an exit, since a
+blurred-then-resumed tab also produces one.
 
 ### Scroll depth: max + final on `$page_leave`
 

@@ -675,19 +675,47 @@ describe("Capture - page leave + engagement time", () => {
     expect(leave?.data.properties.path).toBe("/");
   });
 
-  test("$page_leave is emitted once when both pagehide and visibilitychange fire", () => {
+  test("a desktop close (hidden then pagehide) emits a checkpoint then a terminal upgrade", () => {
     const { cap, events } = makeCapture();
     cap.start();
     events.length = 0;
-    // Desktop close fires `visibilitychange -> hidden` followed by
-    // `pagehide`. Both wire to onPageHide; the dedup flag must keep
-    // `$page_leave` from emitting twice for the same terminal event.
+    // Desktop close fires `visibilitychange -> hidden` (a checkpoint, since
+    // mobile may have no pagehide) and THEN `pagehide` (the definitive
+    // terminal). The pagehide must upgrade rather than be deduped away, so a
+    // real exit is recorded as terminal and not misread as a resumable blur.
     Object.defineProperty(document, "visibilityState", { value: "hidden", configurable: true });
     document.dispatchEvent(new Event("visibilitychange"));
     window.dispatchEvent(new Event("pagehide"));
 
     const leaves = events.filter((e) => e.type === "$page_leave");
+    expect(leaves.map((e) => e.data.properties.trigger)).toEqual(["hidden", "pagehide"]);
+    // Engagement is banked on the checkpoint; the terminal upgrade adds ~0.
+    expect(leaves[1].data.properties.engagement_time_ms).toBe(0);
+  });
+
+  test("a repeated terminal signal is still deduped (no third leave)", () => {
+    const { cap, events } = makeCapture();
+    cap.start();
+    events.length = 0;
+    Object.defineProperty(document, "visibilityState", { value: "hidden", configurable: true });
+    document.dispatchEvent(new Event("visibilitychange"));
+    window.dispatchEvent(new Event("pagehide"));
+    window.dispatchEvent(new Event("pagehide")); // duplicate terminal
+
+    const leaves = events.filter((e) => e.type === "$page_leave");
+    expect(leaves).toHaveLength(2); // hidden + one pagehide, not three
+  });
+
+  test("a tab-blur with no following pagehide stays a single hidden checkpoint", () => {
+    const { cap, events } = makeCapture();
+    cap.start();
+    events.length = 0;
+    Object.defineProperty(document, "visibilityState", { value: "hidden", configurable: true });
+    document.dispatchEvent(new Event("visibilitychange"));
+
+    const leaves = events.filter((e) => e.type === "$page_leave");
     expect(leaves).toHaveLength(1);
+    expect(leaves[0].data.properties.trigger).toBe("hidden");
   });
 
   test("$page_leave carries a trigger distinguishing how the page closed", () => {

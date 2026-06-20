@@ -79,8 +79,16 @@ export class Capture {
     this._scrollThrottled = false;
     /** @type {boolean|undefined} pagehide.persisted, ferried into the next $page_leave. */
     this._pendingPersisted = undefined;
-    /** @type {boolean} True when $page_leave has been emitted for the current path. */
+    /** @type {boolean} True once any $page_leave (checkpoint or terminal) has fired for the current path. */
     this._pageLeaveEmitted = false;
+    /**
+     * @type {boolean} True once a TERMINAL $page_leave (trigger "pagehide")
+     * has fired for the current path. Tracked separately from
+     * `_pageLeaveEmitted` so a real `pagehide` can upgrade a prior "hidden"
+     * checkpoint to a terminal leave, while a repeat of the same signal class
+     * is still deduped.
+     */
+    this._terminalEmitted = false;
   }
 
   /** Wire up listeners and emit the initial page view. */
@@ -122,7 +130,10 @@ export class Capture {
       if (typeof document !== "undefined") {
         document.addEventListener("visibilitychange", safe(() => {
           if (document.visibilityState === "hidden") this.onPageHide();
-          else if (document.visibilityState === "visible") this._pageLeaveEmitted = false;
+          else if (document.visibilityState === "visible") {
+            this._pageLeaveEmitted = false;
+            this._terminalEmitted = false;
+          }
         }));
       }
       this._lastViewport = {
@@ -162,6 +173,7 @@ export class Capture {
     // previous page (handled above) and starts a fresh one, which must be
     // eligible to emit its own $page_leave on the next terminal signal.
     this._pageLeaveEmitted = false;
+    this._terminalEmitted = false;
 
     this.emit("$pageview", {
       properties: {
@@ -487,36 +499,59 @@ export class Capture {
   // -------------------------------------------------------------------------
 
   /**
-   * Terminal signal for the current page. Emits `$page_leave` so the
-   * dashboard records engagement time even when the user closes the tab
-   * or backgrounds the mobile browser.
+   * Terminal-ish signal for the current page. Emits `$page_leave` so the
+   * dashboard records engagement time even when the user closes the tab or
+   * backgrounds the mobile browser.
    *
-   * Wired to two browser events for cross-platform reliability: `pagehide`
-   * (desktop, navigation, bfcache) and `visibilitychange -> hidden` (the
-   * only reliable terminal signal on iOS Safari). Idempotent so the two
-   * events firing in sequence on the same close do not emit two
-   * `$page_leave` events. `_pageLeaveEmitted` is reset on
-   * `visibilitychange -> visible` (page returns to foreground) and on SPA
-   * navigation, so subsequent terminal events fire correctly.
+   * Wired to two browser events because no single one is reliable everywhere:
+   * `pagehide` (the definitive terminal: tab close, navigation, bfcache) and
+   * `visibilitychange -> hidden` (the only terminal signal that reliably
+   * fires on mobile / iOS Safari, but which ALSO fires on a mere tab-blur the
+   * user may return from).
+   *
+   * The catch the `trigger` discriminator has to handle: on a real desktop
+   * close the order is `visibilitychange -> hidden` THEN `pagehide`, so the
+   * hidden signal arrives first. We emit a `"hidden"` checkpoint on it (so
+   * mobile, where `pagehide` often never fires, still gets the event), and
+   * then let a following `pagehide` UPGRADE that to a terminal `"pagehide"`
+   * leave rather than being deduped away. The result:
+   *
+   *   - tab-blur:        one `"hidden"` leave (no `pagehide` follows).
+   *   - desktop close:   a `"hidden"` checkpoint, then a `"pagehide"`
+   *                      terminal leave (engagement is on the checkpoint; the
+   *                      terminal one carries ~0 additional engagement).
+   *   - `pagehide` only: one `"pagehide"` leave.
+   *
+   * So `trigger === "pagehide"` is a dependable "definitely gone" marker,
+   * `"hidden"` is a checkpoint to correlate with later session activity, and
+   * a repeat of the same signal class is still deduped. Both flags reset on
+   * `visibilitychange -> visible` and on SPA navigation.
    *
    * `pagehide.persisted` is forwarded so the dashboard can distinguish a
    * terminal close ("user is gone") from a bfcache-eligible navigation
-   * ("user might Back-button to this exact state"). The two have very
-   * different product meanings.
+   * ("user might Back-button to this exact state").
    *
    * @param {PageTransitionEvent} [event]
    */
   onPageHide(event) {
-    if (this._pageLeaveEmitted) return;
+    // A real `pagehide` event (present only on the pagehide listener) is the
+    // definitive terminal signal; `visibilitychange -> hidden` calls this
+    // with none.
+    const terminal = !!event;
+    if (terminal) {
+      // Allow a `pagehide` through even after a `"hidden"` checkpoint, so it
+      // upgrades to a terminal leave; only drop a repeated terminal signal.
+      if (this._terminalEmitted) return;
+    } else if (this._pageLeaveEmitted) {
+      // A non-terminal hidden signal is a true duplicate once anything has
+      // emitted for this span.
+      return;
+    }
     this._pendingPersisted =
-      event && typeof event.persisted === "boolean" ? event.persisted : false;
-    // The `pagehide` listener passes the event; the `visibilitychange ->
-    // hidden` path calls this with none. That distinguishes a terminal
-    // close / navigation (`pagehide`) from a tab merely being backgrounded
-    // (`hidden`), which the user may return from. Without the discriminator
-    // a dashboard counts every tab-blur as a page exit and overstates leaves.
-    this._emitPageLeave(this.lastPath, event ? "pagehide" : "hidden");
+      terminal && typeof event.persisted === "boolean" ? event.persisted : false;
+    this._emitPageLeave(this.lastPath, terminal ? "pagehide" : "hidden");
     this._pageLeaveEmitted = true;
+    if (terminal) this._terminalEmitted = true;
   }
 
   /**
