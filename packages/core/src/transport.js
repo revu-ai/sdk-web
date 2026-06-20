@@ -137,9 +137,32 @@ export class Transport {
     // Respect backoff on normal flushes; an unload flush always tries (last chance).
     if (!isUnload && (this.sending || Date.now() < this.backoffUntil)) return false;
 
-    const batch = this.queue.peek(this.options.maxBatch);
+    let batch = this.queue.peek(this.options.maxBatch);
     if (batch.length === 0) return true;
-    const body = JSON.stringify({ api_key: this.options.apiKey, batch });
+    let body = serializeBatch(this.options.apiKey, batch);
+    if (body === null) {
+      // One or more events in this batch cannot be serialized (a circular
+      // property, a BigInt, a value with a throwing getter). Caller-supplied
+      // properties are sanitized at capture(), so this is a last-resort
+      // containment for anything that slips through (e.g. a plugin emitting a
+      // raw object). Quarantine just the offending events - dropping them is
+      // the only safe move, since they could never be sent - then rebuild the
+      // batch from the survivors so one poison event never blocks the queue.
+      const bad = batch.filter((event) => !isSerializable(event));
+      this.queue.remove(bad);
+      if (this.options.debug) {
+        console.error(`[REVU] dropped ${bad.length} unserializable event(s)`);
+      }
+      batch = this.queue.peek(this.options.maxBatch);
+      if (batch.length === 0) return true;
+      body = serializeBatch(this.options.apiKey, batch);
+      // Survivors should always serialize after the filter; if somehow not,
+      // drop this batch rather than loop forever on it.
+      if (body === null) {
+        this.queue.commit(batch.length);
+        return false;
+      }
+    }
 
     if (
       isUnload &&
@@ -183,6 +206,38 @@ export class Transport {
     this.failures += 1;
     const delay = Math.min(BACKOFF_BASE_MS * 2 ** (this.failures - 1), BACKOFF_MAX_MS);
     this.backoffUntil = Date.now() + delay;
+  }
+}
+
+/**
+ * Serialize the request body, returning null instead of throwing when the
+ * batch contains an unencodable value. Keeping the throw contained here is
+ * what lets `flush()` quarantine the bad event(s) rather than rejecting the
+ * whole flush and stranding the queue.
+ * @param {string} apiKey
+ * @param {import("./types.js").RevuEvent[]} batch
+ * @returns {string|null}
+ */
+function serializeBatch(apiKey, batch) {
+  try {
+    return JSON.stringify({ api_key: apiKey, batch });
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Whether a single event can be JSON-encoded. Used to pinpoint which
+ * event(s) in a failing batch to quarantine.
+ * @param {import("./types.js").RevuEvent} event
+ * @returns {boolean}
+ */
+function isSerializable(event) {
+  try {
+    JSON.stringify(event);
+    return true;
+  } catch {
+    return false;
   }
 }
 

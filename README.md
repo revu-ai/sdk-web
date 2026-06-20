@@ -11,6 +11,9 @@ revu.init({ apiKey: "your-write-key" });
 revu.identify("user-123");                      // on login, replaces the auto id
 revu.capture("Plan Upgraded", { tier: "pro" });   // optional explicit event
 revu.reset();                                   // on logout
+
+revu.optOut();                                  // stop all capture (cookie-banner "reject")
+revu.optIn();                                   // resume capture ("accept")
 ```
 
 ## Identity
@@ -33,6 +36,18 @@ revu.init({
   cookieDomain: ".example.com",   // share one visitor across subdomains
 });
 ```
+
+## Consent and opt-out
+
+Capture is a master switch the host controls at runtime, so a cookie banner can route its state through the SDK instead of wrapping every call in a check.
+
+```js
+revu.optOut();          // stop ALL capture: autocapture, pageviews, custom events, identity events
+revu.optIn();           // resume capture for the same visitor
+revu.hasOptedOut();     // -> boolean
+```
+
+While opted out, every interaction is suppressed before an event is built, so nothing leaves the browser. The choice is **persisted** (same store as identity), so a reload honors it without re-prompting. Persisted ids are kept across an opt-out/opt-in cycle, so opting back in resumes the same visitor rather than minting a new one (call `revu.reset()` if you want a clean break). See **[Privacy and data](packages/core/docs/privacy.md)**.
 
 ## Autocaptured event types
 
@@ -136,8 +151,8 @@ When to skip it: anything autocapture already names. A click on a `<button>Get a
 
 | Metric | Current | Budget |
 |---|---|---|
-| Minified | **21.8 kB** | 30 kB |
-| Gzipped on wire | **7.0 kB** | 10 kB |
+| Minified | **26.2 kB** | 30 kB |
+| Gzipped on wire | **8.2 kB** | 10 kB |
 
 Both metrics are CI gates (`bun run size`, via `size-limit`). Gzipped size is the transfer cost users pay; minified size is the parse and compile cost the browser pays on low-end devices. The 30 / 10 kB ceiling is a deliberate constraint so the SDK is light enough to cold-load on any page without an opt-in budget. New capabilities ship as opt-in modules so the lean core stays lean, and each module is independently budgeted so the full default-on cold-load stays tight as the SDK grows.
 

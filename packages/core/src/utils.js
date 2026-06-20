@@ -54,6 +54,92 @@ export function truncate(value, max = 255) {
   return s.length > max ? s.slice(0, max) : s;
 }
 
+/** Max nesting depth retained when sanitizing caller-supplied properties. */
+const SANITIZE_MAX_DEPTH = 6;
+
+/**
+ * Produce a JSON-serializable copy of caller-supplied event properties.
+ *
+ * Custom `capture()` properties are untrusted input: a host can pass a value
+ * the transport's `JSON.stringify` cannot encode (a circular reference, a
+ * `BigInt`, a function, a DOM node, a getter that throws). Left unchecked,
+ * one such value poisons the durable queue - the bad event sits at the head
+ * and every flush re-throws on it, so nothing ships again. We defuse that at
+ * the source: only the wire-safe leaf types documented for event properties
+ * (string, finite number, boolean, null) survive; nested plain objects and
+ * arrays are cloned with cycle detection and a depth cap; everything else is
+ * dropped (a non-finite number becomes null, matching native JSON behavior).
+ *
+ * Returns undefined for non-object input so the caller can fall back to "no
+ * properties" cleanly. Never throws.
+ *
+ * @param {unknown} input
+ * @returns {Record<string, unknown>|undefined}
+ */
+export function sanitizeProperties(input) {
+  if (input == null || typeof input !== "object" || Array.isArray(input)) return undefined;
+  const seen = new Set();
+  const out = sanitizeValue(input, seen, 0);
+  return /** @type {Record<string, unknown>|undefined} */ (out) || undefined;
+}
+
+/**
+ * Recursively coerce a value to its JSON-safe form, or undefined when it has
+ * no wire-safe representation (so the caller drops the key/element).
+ * @param {unknown} value
+ * @param {Set<object>} seen   Ancestor objects, for cycle detection.
+ * @param {number} depth
+ * @returns {unknown}
+ */
+function sanitizeValue(value, seen, depth) {
+  if (value === null) return null;
+  const type = typeof value;
+  if (type === "string" || type === "boolean") return value;
+  if (type === "number") return Number.isFinite(/** @type {number} */ (value)) ? value : null;
+  // bigint, function, symbol, undefined: no JSON representation - drop.
+  if (type !== "object") return undefined;
+  if (depth >= SANITIZE_MAX_DEPTH) return undefined;
+  const obj = /** @type {object} */ (value);
+  if (seen.has(obj)) return undefined; // cycle: drop the back-reference.
+  // Objects exposing toJSON (e.g. Date) get to define their own wire form;
+  // re-run the result through the sanitizer so a throwing/odd toJSON cannot
+  // smuggle an unserializable value back in.
+  const toJson = /** @type {{ toJSON?: () => unknown }} */ (obj).toJSON;
+  if (typeof toJson === "function") {
+    try {
+      return sanitizeValue(toJson.call(obj), seen, depth);
+    } catch {
+      return undefined;
+    }
+  }
+  seen.add(obj);
+  try {
+    if (Array.isArray(obj)) {
+      const arr = obj.map((item) => {
+        const clean = sanitizeValue(item, seen, depth + 1);
+        // JSON renders a dropped array slot as null; preserve positions.
+        return clean === undefined ? null : clean;
+      });
+      return arr;
+    }
+    /** @type {Record<string, unknown>} */
+    const result = {};
+    for (const key of Object.keys(obj)) {
+      let raw;
+      try {
+        raw = /** @type {Record<string, unknown>} */ (obj)[key];
+      } catch {
+        continue; // a throwing getter: skip this key.
+      }
+      const clean = sanitizeValue(raw, seen, depth + 1);
+      if (clean !== undefined) result[key] = clean;
+    }
+    return result;
+  } finally {
+    seen.delete(obj);
+  }
+}
+
 /**
  * The current "route" path used as the screen/page identifier. Combines
  * pathname with the hash so a hash-router app (e.g. `/#/pricing`) treats each

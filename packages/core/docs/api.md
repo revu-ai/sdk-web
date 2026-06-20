@@ -16,6 +16,7 @@ types. This page documents semantics, examples, and edge cases.
 - [`revu.identify(userId)`](#revuidentifyuserid)
 - [`revu.alias(authoritativeId)`](#revualiasauthoritativeid)
 - [`revu.reset()`](#revureset)
+- [`revu.optOut()` / `revu.optIn()` / `revu.hasOptedOut()`](#revuoptout--revuoptin--revuhasoptedout)
 - [`revu.flush()`](#revuflush)
 - [`revu.use(plugin)`](#revuuseplugin)
 - [`revu.version`](#revuversion)
@@ -144,6 +145,32 @@ on the timeline. Subsequent events use a fresh session id with
 - The `anonymous_id` is never rotated by `reset()`. The browser remains
   a known device.
 
+## `revu.optOut()` / `revu.optIn()` / `revu.hasOptedOut()`
+
+The master capture switch. A cookie banner routes its state through these
+rather than wrapping every call in a consent check.
+
+```js
+revu.optOut();        // stop all capture (reject / withdraw consent)
+revu.optIn();         // resume capture (accept)
+revu.hasOptedOut();   // -> boolean
+```
+
+While opted out, every interaction (autocapture, pageviews, custom
+`capture()` calls, identity events) is suppressed before an event is
+built, so nothing leaves the browser. The choice is persisted in the
+same first-party store as identity, so a reload honors it without
+re-prompting.
+
+**Behavior.**
+
+- Opting out does **not** clear identity. Opting back in resumes the same
+  visitor; call `revu.reset()` if you want a clean break instead.
+- `optOut()` stops new capture but leaves events already queued under
+  prior consent to flush. To also discard locally-buffered events, see
+  [Privacy and data](./privacy.md#dropping-locally-buffered-events).
+- `hasOptedOut()` returns `false` before `init()`.
+
 ## `revu.flush()`
 
 Send any buffered events now. Returns a promise that resolves to `true`
@@ -213,7 +240,8 @@ client.capture("event_name", { foo: "bar" });
 ```
 
 `RevuClient`'s public methods are `start`, `capture`, `identify`,
-`alias`, `reset`, `flush`, and `use`. The capture and identity methods
+`alias`, `reset`, `optOut`, `optIn`, `hasOptedOut`, `flush`, and `use`.
+The capture and identity methods
 mirror the singleton (the singleton calls `start()` for you inside
 `init()`); they are not wrapped with the `safe()` boundary, so a host
 using the class directly is responsible for catching errors at their own

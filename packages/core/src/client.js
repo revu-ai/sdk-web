@@ -6,12 +6,14 @@
 
 import { Attention } from "./attention.js";
 import { Capture } from "./capture.js";
+import { Consent } from "./consent.js";
 import { Context } from "./context.js";
 import { Identity } from "./identity.js";
+import { createStorage } from "./storage.js";
 import { Transport } from "./transport.js";
 import { VERSION } from "./version.js";
 import { Vitals } from "./vitals.js";
-import { nowIso, routePath, uuid } from "./utils.js";
+import { nowIso, routePath, sanitizeProperties, uuid } from "./utils.js";
 
 export class RevuClient {
   /** @param {import("./types.js").ResolvedConfig} config */
@@ -24,6 +26,12 @@ export class RevuClient {
       sessionTimeoutMs: config.sessionTimeoutMs,
     });
     this.context = new Context({ environment: config.environment });
+    this.consent = new Consent({
+      storage: createStorage({
+        mode: config.persistentStorage,
+        cookieDomain: config.cookieDomain,
+      }),
+    });
     this.transport = new Transport({
       host: config.host,
       apiKey: config.apiKey,
@@ -122,6 +130,10 @@ export class RevuClient {
    * @param {{ fingerprint?: import("./types.js").Fingerprint, properties?: Record<string, unknown> }} [data]
    */
   record(eventType, data = {}) {
+    // Master consent gate: while opted out, capture is fully suppressed - no
+    // event is built and nothing is enqueued. Persisted identity is left
+    // untouched so opting back in resumes the same visitor.
+    if (this.consent.optedOut()) return;
     /** @type {import("./types.js").RevuEvent} */
     const event = {
       event_id: uuid(),
@@ -164,11 +176,18 @@ export class RevuClient {
    * is the same verb extended: "we capture everything automatically, AND
    * here is how to also capture this".
    *
+   * Non-string or empty event names are ignored (a no-op), mirroring
+   * `identify()` and `alias()`. Caller-supplied properties are sanitized to a
+   * JSON-safe shape before they enter the pipeline so a stray value (a
+   * circular object, a BigInt, a DOM node) can never poison the durable
+   * queue; unsupported values are dropped.
+   *
    * @param {string} eventType
    * @param {Record<string, unknown>} [properties]
    */
   capture(eventType, properties) {
-    this.record(eventType, { properties });
+    if (typeof eventType !== "string" || eventType.length === 0) return;
+    this.record(eventType, { properties: sanitizeProperties(properties) });
   }
 
   /**
@@ -261,5 +280,30 @@ export class RevuClient {
   /** Send any buffered events now. @returns {Promise<boolean>} */
   flush() {
     return this.transport.flush();
+  }
+
+  /**
+   * Stop all capture for this visitor and persist the choice so reloads
+   * honor it. While opted out every interaction (autocapture, pageviews,
+   * custom events, identity events) is suppressed at {@link record}. The
+   * route a cookie banner's "reject" path should call.
+   */
+  optOut() {
+    this.consent.optOut();
+  }
+
+  /**
+   * Resume capture after a prior {@link optOut} and persist the choice. The
+   * "accept" path's counterpart. Capture stays anonymous-or-identified
+   * exactly as it was before the opt-out, since identity is never cleared by
+   * consent changes.
+   */
+  optIn() {
+    this.consent.optIn();
+  }
+
+  /** @returns {boolean} Whether capture is currently suppressed. */
+  hasOptedOut() {
+    return this.consent.optedOut();
   }
 }

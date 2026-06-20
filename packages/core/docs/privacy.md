@@ -76,21 +76,38 @@ kilobytes.
 
 ## Opt-out
 
-Until a hosted opt-out endpoint ships, the recommended pattern is to
-defer `init()` based on your consent state:
+Capture is a master switch the host controls at runtime, so a cookie
+banner routes its state through the SDK rather than wrapping every call
+in a check:
 
 ```js
-if (userHasConsented()) {
-  revu.init({ apiKey: "revu_pk_..." });
-}
+revu.optOut();        // stop all capture (reject / withdraw consent)
+revu.optIn();         // resume capture (accept)
+revu.hasOptedOut();   // -> boolean
 ```
+
+While opted out, every interaction (autocapture, pageviews, custom
+`capture()` calls, identity events) is suppressed before an event is
+built, so nothing leaves the browser. The choice is persisted in the
+same first-party store as identity, so a reload honors it without
+re-prompting.
+
+Opting out does not clear identity: opting back in resumes the same
+visitor. That is the right default for a consent toggle (a user who
+re-accepts is the same person). Call `revu.reset()` if you instead want
+a clean break to a new anonymous visitor.
 
 For per-element opt-out, use `data-revu-mask` on the subtree.
 
-If you need to drop all locally-buffered events for a user who
-withdraws consent, clear the durable queue and identity stores:
+### Dropping locally-buffered events
+
+`optOut()` stops new capture but leaves events already queued under prior
+consent to flush. To also discard any locally-buffered events and stored
+ids for a user who withdraws consent, clear the durable queue and
+identity stores:
 
 ```js
+revu.optOut();
 try {
   localStorage.removeItem("revu_event_queue");
   localStorage.removeItem("revu_anonymous_id");
@@ -98,11 +115,11 @@ try {
   localStorage.removeItem("revu_session_id");
   localStorage.removeItem("revu_session_last_seen");
 } catch {}
-document.cookie = "revu_anonymous_id=; Path=/; Max-Age=0; SameSite=Lax";
-document.cookie = "revu_user_id=; Path=/; Max-Age=0; SameSite=Lax";
-document.cookie = "revu_session_id=; Path=/; Max-Age=0; SameSite=Lax";
-document.cookie = "revu_session_last_seen=; Path=/; Max-Age=0; SameSite=Lax";
+for (const id of ["revu_anonymous_id", "revu_user_id", "revu_session_id", "revu_session_last_seen"]) {
+  document.cookie = `${id}=; Path=/; Max-Age=0; SameSite=Lax`;
+}
 ```
 
-A first-class consent and opt-out helper is planned; until then, the
-patterns above fully disable capture and clear any stored ids.
+A server-side right-to-be-forgotten helper that also purges already-ingested
+events is planned; until then, the above fully disables capture and clears
+local state.

@@ -388,3 +388,52 @@ describe("RevuClient > plugins", () => {
     expect(api?.config).toBe(client.config);
   });
 });
+
+describe("RevuClient > capture() hardening", () => {
+  test("empty or non-string event names are ignored", () => {
+    const { client, events } = makeClient();
+    client.capture("");
+    client.capture(/** @type {any} */ (null));
+    client.capture(/** @type {any} */ (123));
+    expect(events.length).toBe(0);
+  });
+
+  test("a circular property is sanitized so the event stays wire-safe", () => {
+    const { client, events } = makeClient();
+    const circular = /** @type {any} */ ({ keep: "ok" });
+    circular.self = circular;
+
+    client.capture("evt", { circular, n: 5 });
+
+    const e = events.find((ev) => ev.event_type === "evt");
+    expect(e).toBeDefined();
+    // The whole event must serialize without throwing.
+    expect(() => JSON.stringify(e)).not.toThrow();
+    // The serializable parts survive; the cycle is dropped, not the object.
+    expect(e?.properties.n).toBe(5);
+    expect(/** @type {any} */ (e?.properties.circular).keep).toBe("ok");
+    expect(/** @type {any} */ (e?.properties.circular).self).toBeUndefined();
+  });
+
+  test("unsupported value types are dropped, finite numbers survive", () => {
+    const { client, events } = makeClient();
+    client.capture("evt", {
+      fn: () => {},
+      big: 10n,
+      sym: Symbol("x"),
+      nan: Number.NaN,
+      good: "yes",
+      flag: false,
+      nothing: null,
+    });
+
+    const props = events.find((ev) => ev.event_type === "evt")?.properties;
+    expect(props?.good).toBe("yes");
+    expect(props?.flag).toBe(false);
+    expect(props?.nothing).toBe(null);
+    expect(props?.nan).toBe(null); // non-finite coerced to null (JSON parity)
+    expect("fn" in (props || {})).toBe(false);
+    expect("big" in (props || {})).toBe(false);
+    expect("sym" in (props || {})).toBe(false);
+  });
+});

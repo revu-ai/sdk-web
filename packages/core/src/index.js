@@ -38,6 +38,15 @@ function onError(err) {
 
 /**
  * The default singleton - the one-line entry point for the SDK.
+ *
+ * Cast to the explicit {@link import("./types.js").Revu} type so the
+ * generated `.d.ts` exposes real parameter types and per-method docs to
+ * consumers who `import revu from "@revu-ai/core"`. Without the cast, tsc
+ * infers the public surface through the `safe()` wrapper and every method
+ * lands as `(...args: any) => ...`, erasing the JSDoc types this codebase
+ * treats as its single source of truth.
+ *
+ * @type {import("./types.js").Revu}
  */
 const revu = {
   /**
@@ -110,6 +119,38 @@ const revu = {
    * No-op when no user is currently identified.
    */
   reset: safe(() => client?.reset(), onError),
+
+  /**
+   * Stop all capture for this visitor and persist the choice across reloads.
+   * The route a cookie banner's "reject" / "withdraw consent" path should
+   * call: while opted out, every interaction (autocapture, pageviews, custom
+   * events, identity events) is suppressed and nothing leaves the browser.
+   * Persisted identity ids are kept, so {@link revu.optIn} resumes the same
+   * visitor. No-op before `init()`.
+   */
+  optOut: safe(() => client?.optOut(), onError),
+
+  /**
+   * Resume capture after a prior {@link revu.optOut} and persist the choice.
+   * The cookie banner "accept" counterpart. No-op before `init()`.
+   */
+  optIn: safe(() => client?.optIn(), onError),
+
+  /**
+   * Whether capture is currently suppressed by a prior {@link revu.optOut}.
+   * Returns false before `init()`. Unlike the void methods this returns a
+   * value, so it catches internally (rather than via `safe()`) to always hand
+   * back a real boolean and never `undefined`.
+   * @returns {boolean}
+   */
+  hasOptedOut() {
+    try {
+      return client ? client.hasOptedOut() : false;
+    } catch (err) {
+      onError(err);
+      return false;
+    }
+  },
 
   /** Flush buffered events immediately. @returns {Promise<boolean>|undefined} */
   flush: safe(() => client?.flush(), onError),

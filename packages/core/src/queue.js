@@ -124,6 +124,22 @@ export class PersistentQueue {
     this.persist();
   }
 
+  /**
+   * Drop specific events (by reference identity) from the queue and persist.
+   * The transport uses this to quarantine events that cannot be serialized,
+   * so a single poison event never blocks the durable queue forever. A
+   * removed event is gone for good - quarantine only fires for payloads that
+   * could never be sent anyway. No-op on an empty list.
+   * @param {import("./types.js").RevuEvent[]} events
+   */
+  remove(events) {
+    if (!events || events.length === 0) return;
+    const drop = new Set(events);
+    const before = this.items.length;
+    this.items = this.items.filter((e) => !drop.has(e));
+    if (this.items.length !== before) this.persist();
+  }
+
   /** @returns {number} Number of events currently queued. */
   size() {
     return this.items.length;

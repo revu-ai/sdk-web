@@ -417,4 +417,52 @@ describe("Transport", () => {
     expect(t.queue.size()).toBe(0);
     clearInterval(t.timer ?? undefined);
   });
+
+  describe("unserializable event quarantine", () => {
+    test("a single poison event cannot block the queue forever", async () => {
+      const fetchMock = mockFetch(() => Promise.resolve(new Response("", { status: 200 })));
+      const { t } = makeTransport();
+
+      // Two good events bracket one whose property is a circular reference,
+      // which JSON.stringify cannot encode.
+      const circular = /** @type {any} */ ({});
+      circular.self = circular;
+      t.enqueue(makeEvent(1));
+      t.enqueue(/** @type {any} */ ({ ...makeEvent(2), properties: { bad: circular } }));
+      t.enqueue(makeEvent(3));
+      expect(t.queue.size()).toBe(3);
+
+      // The flush must NOT throw. It drops only the poison event, then ships
+      // the survivors in the same pass - so one bad event costs nothing more
+      // than itself.
+      let threw = false;
+      let ok;
+      try {
+        ok = await t.flush();
+      } catch {
+        threw = true;
+      }
+      expect(threw).toBe(false);
+      expect(ok).toBe(true);
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      expect(t.queue.size()).toBe(0);
+      const body = JSON.parse(/** @type {string} */ (fetchMock.mock.calls[0][1].body));
+      expect(body.batch.map((/** @type {any} */ e) => e.event_id)).toEqual(["e1", "e3"]);
+    });
+
+    test("a BigInt property is also quarantined, never thrown", async () => {
+      mockFetch(() => Promise.resolve(new Response("", { status: 200 })));
+      const { t } = makeTransport();
+      t.enqueue(/** @type {any} */ ({ ...makeEvent(1), properties: { big: 10n } }));
+
+      let threw = false;
+      try {
+        await t.flush();
+      } catch {
+        threw = true;
+      }
+      expect(threw).toBe(false);
+      expect(t.queue.size()).toBe(0); // the lone poison event is dropped
+    });
+  });
 });

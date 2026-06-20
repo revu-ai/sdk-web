@@ -45,11 +45,13 @@ async function bundleConsumer(/** @type {string} */ entrypoint) {
 describe("downstream tree-shake", () => {
   test("a minimal consumer (init + identify + track + reset) bundles within envelope", async () => {
     const { byteSize } = await bundleConsumer("consumer-minimal.js");
-    // Generous ceiling: the shipped artifact is ~3 kB gzip, ~15 kB raw.
-    // A minified-but-uncompressed consumer bundle of this fixture should
-    // land well below 25 kB; if it climbs above, something has pulled in
-    // unexpected dependencies and warrants investigation.
-    expect(byteSize).toBeLessThan(25_000);
+    // Generous ceiling, not a hard budget (the hard budget is the size-limit
+    // gzip gate on dist/index.js). A minified-but-uncompressed consumer
+    // bundle of this fixture reaches record() (consent gate) and capture()
+    // (property sanitizer) as part of the universal core surface; if it
+    // climbs above this ceiling, something has pulled in an unexpected
+    // dependency (e.g. a subpath plugin) and warrants investigation.
+    expect(byteSize).toBeLessThan(30_000);
   });
 
   test("the minimal consumer bundle contains the public surface (sanity check)", async () => {

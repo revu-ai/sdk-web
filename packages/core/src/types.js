@@ -28,6 +28,27 @@
  */
 
 /**
+ * The public SDK singleton returned as the default export of `@revu-ai/core`
+ * (and installed at `window.revu` by the IIFE build). Declared explicitly so
+ * consumers who `import revu from "@revu-ai/core"` get full parameter types
+ * and inline docs on every method, rather than the `any`-typed surface a
+ * generated declaration would otherwise infer through the `safe()` wrapper.
+ *
+ * @typedef {object} Revu
+ * @property {(config: RevuConfig) => void} init  Initialize the SDK (idempotent; later calls are ignored).
+ * @property {(plugin: RevuPlugin) => void} use   Register a plugin (queued before `init()`, installed immediately after).
+ * @property {(eventType: string, properties?: Record<string, unknown>) => void} capture  Capture a custom event. Empty / non-string names are ignored; properties are sanitized to a JSON-safe shape.
+ * @property {(userId: string) => void} identify  Link the anonymous visitor to a known user id.
+ * @property {(authoritativeId: string) => void} alias  Join the current identity to a separate authoritative id (cross-device stitching).
+ * @property {() => void} reset                   Sign-out: clear the user, rotate the session, emit `$reset`.
+ * @property {() => void} optOut                  Stop all capture for this visitor and persist the choice.
+ * @property {() => void} optIn                   Resume capture after a prior `optOut()` and persist the choice.
+ * @property {() => boolean} hasOptedOut          Whether capture is currently suppressed.
+ * @property {() => (Promise<boolean>|undefined)} flush  Flush buffered events immediately.
+ * @property {string} version                     Build version of `@revu-ai/core` baked into this bundle.
+ */
+
+/**
  * A REVU plugin. Plugins extend the SDK with new event types or behaviors
  * without bloating the core. They receive a small API surface at install
  * time and can call `record()` to emit events through the same pipeline
@@ -88,7 +109,7 @@
  * @property {string} anonymous_id         First-party device/session UUID.
  * @property {string|null} user_id         Identified visitor id. With autoIdentify (default), a persistent UUID is assigned on first visit and stays attached until the host app overrides it via identify(). With autoIdentify off, null until identify() is called.
  * @property {string} session_id           Per-session UUID.
- * @property {number} sequence_no          Per-session monotonic counter (gap = loss).
+ * @property {number} sequence_no          Per-page-load monotonic counter, starting at 0 on each SDK construction. Detects event loss *within* a single page load (a gap means a dropped event). It does NOT span a session: a session continued across reloads / tabs restarts the counter at 0 each load, so loss detection across loads relies on `event_id` (the dedupe key) rather than this field. A true per-session counter is deferred until the cross-tab queue mutex lands (sharing one counter across tabs without it would race).
  * @property {"web"} platform              Capture platform.
  * @property {string} event_type           "$pageview" | "$autocapture" | custom name.
  * @property {string} screen               Route/path at capture time.

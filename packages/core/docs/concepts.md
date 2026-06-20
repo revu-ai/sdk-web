@@ -131,8 +131,13 @@ shape:
 - **`event_id`** is a client-generated UUID and the idempotency key.
   The ingest endpoint dedupes on it if the SDK ever retries a batch
   that actually landed.
-- **`sequence_no`** is a per-session monotonic counter. Gaps in the
-  sequence are evidence of loss (you should never see one).
+- **`sequence_no`** is a per-page-load monotonic counter, starting at 0
+  on each SDK construction. A gap within one page load is evidence of
+  loss. It does not span a session: a session continued across reloads
+  or tabs restarts the counter at 0 each load, so cross-load loss
+  detection relies on `event_id` (the dedupe key), not this field. A
+  true per-session counter is deferred until the cross-tab queue mutex
+  lands (sharing one counter across tabs without it would race).
 - **`screen`** is the route at the moment the event is recorded and is
   the canonical page field. It equals `properties.path` for every event
   with one deliberate exception: on `$page_leave`, `screen` is the route
