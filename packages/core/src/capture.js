@@ -52,12 +52,22 @@ export class Capture {
    * @param {(err: unknown) => void} [onError]  Reports a swallowed
    *   listener-handler error; in debug it logs, otherwise it is a no-op. The
    *   handler is always swallowed regardless (never propagates to the host).
+   * @param {{ denySelectors?: string[], allowSelectors?: string[] }} [options]
+   *   CSS-selector filters applied to element-targeted autocapture (clicks,
+   *   right-clicks, form-control changes). `denySelectors` suppresses capture
+   *   for any element matching (or nested inside) one of the selectors;
+   *   `allowSelectors`, when non-empty, restricts capture to elements matching
+   *   (or nested inside) one of them. Deny wins over allow.
    */
-  constructor(emit, attention, onError) {
+  constructor(emit, attention, onError, options = {}) {
     this.emit = emit;
     this.attention = attention;
     /** @type {(err: unknown) => void} */
     this.onError = onError || (() => {});
+    /** @type {string[]} Selectors whose elements are never autocaptured. */
+    this._denySelectors = sanitizeSelectors(options.denySelectors);
+    /** @type {string[]} When non-empty, only matching elements are autocaptured. */
+    this._allowSelectors = sanitizeSelectors(options.allowSelectors);
     /** @type {string|undefined} */
     this.lastPath = undefined;
     /** @type {Set<number>} Scroll milestones already fired on the current page. */
@@ -226,6 +236,27 @@ export class Capture {
   }
 
   // -------------------------------------------------------------------------
+  // Selector filtering (configurable allow / deny lists)
+  // -------------------------------------------------------------------------
+
+  /**
+   * Whether an element-targeted interaction on `el` should be suppressed by
+   * the configured selector filters. Deny wins: an element matching (or nested
+   * inside) a deny selector is always blocked. When an allow list is set, only
+   * elements matching (or nested inside) it are captured; everything else is
+   * blocked. Matching walks ancestors via `closest`, so a click on the inner
+   * icon of a denied button is blocked too. Suppressing the click also drops
+   * the events derived from it (rage, file-download, outbound-link).
+   * @param {Element} el
+   * @returns {boolean}
+   */
+  _isBlocked(el) {
+    if (this._denySelectors.length && matchesAny(el, this._denySelectors)) return true;
+    if (this._allowSelectors.length && !matchesAny(el, this._allowSelectors)) return true;
+    return false;
+  }
+
+  // -------------------------------------------------------------------------
   // Clicks (autocapture + rage + outbound / download classification)
   // -------------------------------------------------------------------------
 
@@ -241,6 +272,7 @@ export class Capture {
   onClick(e) {
     const el = composedElement(e);
     if (!el) return;
+    if (this._isBlocked(el)) return;
     const fp = fingerprint(el);
 
     this.emit("$autocapture", {
@@ -260,6 +292,7 @@ export class Capture {
   onContextMenu(e) {
     const el = composedElement(e);
     if (!el) return;
+    if (this._isBlocked(el)) return;
     this.emit("$rightclick", {
       fingerprint: fingerprint(el),
       properties: { path: routePath() },
@@ -419,6 +452,7 @@ export class Capture {
   onChange(e) {
     const el = composedElement(e);
     if (!el) return;
+    if (this._isBlocked(el)) return;
     const tag = (el.tagName || "").toLowerCase();
     if (tag !== "input" && tag !== "select" && tag !== "textarea") return;
     const isInput = tag === "input";
@@ -612,6 +646,38 @@ export class Capture {
     this._pendingPersisted = undefined;
     this.emit("$page_leave", { properties });
   }
+}
+
+/**
+ * Keep only the usable (non-empty string) selectors from a configured list,
+ * tolerating a non-array or junk entries so a misconfigured option can never
+ * throw at construction.
+ * @param {unknown} selectors
+ * @returns {string[]}
+ */
+function sanitizeSelectors(selectors) {
+  if (!Array.isArray(selectors)) return [];
+  return selectors.filter((s) => typeof s === "string" && s.length > 0);
+}
+
+/**
+ * Whether `el` or any of its ancestors matches one of the CSS selectors. An
+ * invalid selector is ignored (treated as no match) rather than thrown, so a
+ * single bad entry never breaks capture.
+ * @param {Element} el
+ * @param {string[]} selectors
+ * @returns {boolean}
+ */
+function matchesAny(el, selectors) {
+  if (typeof el.closest !== "function") return false;
+  for (const selector of selectors) {
+    try {
+      if (el.closest(selector)) return true;
+    } catch {
+      // Invalid selector string: ignore it.
+    }
+  }
+  return false;
 }
 
 /**

@@ -569,3 +569,90 @@ describe("RevuClient > capture() hardening", () => {
     expect("sym" in (props || {})).toBe(false);
   });
 });
+
+describe("RevuClient > beforeSend", () => {
+  /**
+   * @param {import("../src/types.js").RevuConfig["beforeSend"]} beforeSend
+   */
+  function makeClientWith(beforeSend) {
+    /** @type {import("../src/types.js").RevuEvent[]} */
+    const events = [];
+    const client = new RevuClient({
+      apiKey: "revu_pk_test_1234567890",
+      host: "https://api.test",
+      autocapture: false,
+      autoIdentify: false,
+      flushAt: 10_000,
+      flushIntervalMs: 60_000,
+      maxBatch: 50,
+      maxQueue: 1000,
+      debug: false,
+      beforeSend,
+      onEvent: (e) => events.push(e),
+    });
+    return { client, events };
+  }
+
+  test("can enrich an event by mutating it in place", () => {
+    const { client, events } = makeClientWith((event) => {
+      event.properties.enriched = true;
+      return event;
+    });
+    client.capture("evt");
+    expect(events[0].properties.enriched).toBe(true);
+  });
+
+  test("returning null drops the event", () => {
+    const { client, events } = makeClientWith(() => null);
+    client.capture("evt");
+    expect(events.length).toBe(0);
+  });
+
+  test("returning false drops the event", () => {
+    const { client, events } = makeClientWith((event) =>
+      event.event_type === "drop_me" ? false : event,
+    );
+    client.capture("keep_me");
+    client.capture("drop_me");
+    expect(events.map((e) => e.event_type)).toEqual(["keep_me"]);
+  });
+
+  test("returning nothing (void) sends the event unchanged", () => {
+    const { client, events } = makeClientWith(() => {
+      // no return
+    });
+    client.capture("evt", { foo: "bar" });
+    expect(events[0].properties.foo).toBe("bar");
+  });
+
+  test("a throwing hook is fail-open: the original event is still sent", () => {
+    const { client, events } = makeClientWith(() => {
+      throw new Error("hook boom");
+    });
+    client.capture("evt");
+    expect(events.length).toBe(1);
+    expect(events[0].event_type).toBe("evt");
+  });
+
+  test("a hook that injects an unserializable value cannot poison the queue", () => {
+    const { client, events } = makeClientWith((event) => {
+      event.properties.bad = () => {}; // functions have no JSON form
+      event.properties.good = "kept";
+      return event;
+    });
+    client.capture("evt");
+    const e = events[0];
+    expect(() => JSON.stringify(e)).not.toThrow();
+    expect("bad" in e.properties).toBe(false);
+    expect(e.properties.good).toBe("kept");
+  });
+
+  test("a replacement object returned by the hook is what ships", () => {
+    const { client, events } = makeClientWith((event) => ({
+      ...event,
+      event_type: "rewritten",
+    }));
+    client.capture("original");
+    expect(events[0].event_type).toBe("rewritten");
+  });
+});

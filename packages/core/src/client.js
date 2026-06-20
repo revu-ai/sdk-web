@@ -76,7 +76,10 @@ export class RevuClient {
      // `capture(eventName, properties)` method below. The field still
      // refers to the auto-capture engine specifically, so `autocapture`
      // reads more accurately too.
-    this.autocapture = new Capture(emit, this.attention, reportError);
+    this.autocapture = new Capture(emit, this.attention, reportError, {
+      denySelectors: config.autocaptureDenySelectors,
+      allowSelectors: config.autocaptureAllowSelectors,
+    });
     this.vitals = new Vitals(emit, reportError);
     /** @type {number} */
     this.sequence = 0;
@@ -222,7 +225,29 @@ export class RevuClient {
       },
       device_time: nowIso(),
     };
-    this.transport.enqueue(event);
+    // beforeSend: a last-mile hook to enrich, redact, or drop an event before
+    // it is queued. Returning null / false drops it; returning an object
+    // (the same one mutated, or a replacement) sends that. The hook is
+    // fail-open: if it throws (or returns nothing), the original event is
+    // sent unchanged so a buggy hook never silently deletes analytics. The
+    // result's properties are re-sanitized so a hook cannot poison the
+    // durable queue with an unserializable value.
+    let outgoing = event;
+    const beforeSend = this.config.beforeSend;
+    if (typeof beforeSend === "function") {
+      let result;
+      try {
+        result = beforeSend(event);
+      } catch (err) {
+        if (this.config.debug) {
+          console.error("[REVU] beforeSend threw; sending the event unchanged", err);
+        }
+      }
+      if (result === null || result === false) return;
+      if (result && typeof result === "object") outgoing = result;
+      outgoing.properties = sanitizeProperties(outgoing.properties) || {};
+    }
+    this.transport.enqueue(outgoing);
     // Keep the persisted session.last_seen current so a reload inside the
     // continuation window picks the same session_id back up. The identity
     // layer throttles persistence so this is cheap on chatty pages.

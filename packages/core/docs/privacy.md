@@ -54,6 +54,13 @@ honored:
 The attribute also crosses Shadow DOM boundaries: a `data-revu-mask` on
 a custom element's host applies to every element in its shadow tree.
 
+`data-revu-mask` still emits the interaction, just with its labels
+redacted. When you want no event at all for a region - not even a
+redacted one - use the
+[`autocaptureDenySelectors`](./configuration.md#autocapture-selector-filtering)
+config option instead; it suppresses the event entirely, including any
+file-download / outbound-link / rage events derived from the click.
+
 ## URLs and query strings
 
 Captured URLs (the `$pageview` `url`, the referrer, and `$outbound_link` /

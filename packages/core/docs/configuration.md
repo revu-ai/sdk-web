@@ -28,6 +28,9 @@ Defaults are tuned to be the right answer for a typical product surface.
 | `honorGpc`          | `boolean`                                    | `false`                 | When `true`, a browser [Global Privacy Control](#consent-and-gpc) signal defaults the `analytics` consent category to denied (suppressing capture) unless the visitor has made an explicit choice. Left `false` by default: honoring GPC is a jurisdictional decision for you to make (it is a valid opt-out under CCPA/CPRA but not the consent mechanism under GDPR), and auto-denying would silently drop data on upgrade. The signal is stamped on every event as `$gpc` regardless of this flag. |
 | `debug`             | `boolean`                                    | `false`                 | Log every captured event and internal error to the console with a `[REVU]` prefix.                                                                                                                                                                                  |
 | `onEvent`           | `(event) => void`                            | `() => {}`              | Local hook called with every captured event. Useful for debug overlays, screenshot annotations, and tests.                                                                                                                                                          |
+| `beforeSend`        | `(event) => event \| null \| false \| void`  | `null`                  | [Last-mile hook](#beforesend-enrich-redact-or-drop) called with each built event before it queues. Return the event (mutated or replaced) to send it, `null` / `false` to drop it, or nothing to send it unchanged. Use it to enrich, redact, or filter. Fail-open: a throwing hook sends the event unchanged rather than dropping it. |
+| `autocaptureAllowSelectors` | `string[]`                           | `[]`                    | When non-empty, only elements matching (or nested inside) one of these CSS selectors are autocaptured for clicks, right-clicks, and form-control changes. See [selector filtering](#autocapture-selector-filtering).                                                  |
+| `autocaptureDenySelectors`  | `string[]`                           | `[]`                    | CSS selectors whose elements (and descendants) are excluded from element-targeted autocapture. Deny wins over allow. See [selector filtering](#autocapture-selector-filtering).                                                                                      |
 | `plugins`           | `RevuPlugin[]`                               | `[]`                    | Plugins to install during `init()`. Equivalent to a `revu.use(plugin)` for each, but co-located with the rest of the config.                                                                                                                                        |
 
 ## `sessionTimeoutMs`: sessions are engagement, not page visits
@@ -110,3 +113,70 @@ suppression depends on your jurisdiction, so the decision is left to you.
 ```js
 revu.init({ apiKey: "...", honorGpc: true }); // auto-deny on a GPC signal
 ```
+
+## `beforeSend`: enrich, redact, or drop
+
+`beforeSend` runs once per event, after the SDK has built the full event
+but before it is queued. It is the place to add host context the SDK
+cannot know, strip a field, or filter events you never want to store.
+
+```js
+revu.init({
+  apiKey: "...",
+  beforeSend(event) {
+    // Enrich: attach something only the host knows.
+    event.properties.tenant_plan = window.__APP__.plan;
+
+    // Redact: drop a field you do not want stored.
+    delete event.properties.some_internal_id;
+
+    // Drop: filter noisy events entirely.
+    if (event.event_type === "$autocapture" && event.screen === "/debug") {
+      return null;
+    }
+
+    return event; // send it (mutated in place, or return a new object)
+  },
+});
+```
+
+- Return the event (the same one mutated, or a replacement object) to
+  send it; return `null` or `false` to drop it; return nothing to send it
+  unchanged.
+- It is **fail-open**: if the hook throws, the original event is sent
+  unchanged (and the error is logged when `debug` is on), so a bug in the
+  hook never silently deletes analytics.
+- The returned event's `properties` are re-sanitized to a JSON-safe shape,
+  so the hook cannot poison the durable queue with an unserializable value.
+- It does not run for events that were never built - capture suppressed by
+  consent or sampling never reaches `beforeSend`.
+
+## Autocapture selector filtering
+
+`autocaptureDenySelectors` and `autocaptureAllowSelectors` scope which
+elements element-targeted autocapture (clicks, right-clicks, form-control
+changes) observes. Matching walks ancestors, so a selector on a container
+also covers the elements inside it.
+
+```js
+revu.init({
+  apiKey: "...",
+  // Never autocapture anything inside these:
+  autocaptureDenySelectors: [".sensitive-widget", "[data-no-track]"],
+});
+
+// Or capture ONLY inside an explicit set (everything else is ignored):
+revu.init({
+  apiKey: "...",
+  autocaptureAllowSelectors: ["main", ".tracked"],
+});
+```
+
+- **Deny wins.** An element matching a deny selector is never captured,
+  even if it also matches an allow selector.
+- A deny selector suppresses the event **entirely**, including the
+  file-download, outbound-link, and rage-click events derived from a
+  click. This is the difference from `data-revu-mask`, which still emits
+  the event but redacts its fingerprint - use a deny selector when you
+  want no event at all, and `data-revu-mask` when you want the interaction
+  recorded without its labels. An invalid selector is ignored, not thrown.

@@ -22,6 +22,9 @@ const DEFAULTS = {
   sessionTimeoutMs: 30 * 60 * 1000,
   sampleRate: 1,
   honorGpc: false,
+  beforeSend: null,
+  autocaptureAllowSelectors: [],
+  autocaptureDenySelectors: [],
   plugins: [],
 };
 

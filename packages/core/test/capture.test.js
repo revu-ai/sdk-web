@@ -39,9 +39,10 @@ beforeAll(() => {
 
 /**
  * Build a fresh Capture instance whose emitted events go into a local array.
+ * @param {{ denySelectors?: string[], allowSelectors?: string[] }} [options]
  * @returns {{ cap: Capture, events: CapturedEvent[] }}
  */
-function makeCapture() {
+function makeCapture(options) {
   /** @type {CapturedEvent[]} */
   const events = [];
   // Capture now delegates the engagement clock to the Attention layer.
@@ -52,7 +53,7 @@ function makeCapture() {
     events.push({ type, data: data || {} });
   const attention = new Attention(emit, { captureAttention: false, idleTimeoutMs: 60_000 });
   attention.start();
-  const cap = new Capture(emit, attention);
+  const cap = new Capture(emit, attention, undefined, options);
   return { cap, events };
 }
 
@@ -1530,3 +1531,103 @@ describe("Capture - redaction invariant: a planted value never leaves the browse
   }
 });
 
+
+describe("Capture > selector allow / deny filtering", () => {
+  test("denySelectors suppresses clicks on matching elements (and descendants)", () => {
+    const btn = document.createElement("button");
+    btn.className = "secret";
+    const icon = document.createElement("span");
+    icon.textContent = "x";
+    btn.appendChild(icon);
+    document.body.appendChild(btn);
+
+    const { cap, events } = makeCapture({ denySelectors: [".secret"] });
+    cap.start();
+    events.length = 0;
+
+    btn.click(); // direct hit on the denied element
+    icon.click(); // a descendant of the denied element
+    expect(events.filter((e) => e.type === "$autocapture")).toHaveLength(0);
+  });
+
+  test("non-denied elements are still captured", () => {
+    const denied = document.createElement("button");
+    denied.className = "secret";
+    const ok = document.createElement("button");
+    ok.id = "ok";
+    document.body.append(denied, ok);
+
+    const { cap, events } = makeCapture({ denySelectors: [".secret"] });
+    cap.start();
+    events.length = 0;
+
+    denied.click();
+    ok.click();
+    const clicks = events.filter((e) => e.type === "$autocapture");
+    expect(clicks).toHaveLength(1);
+    expect(clicks[0].data.fingerprint.id).toBe("ok");
+  });
+
+  test("allowSelectors restricts capture to matching elements only", () => {
+    const tracked = document.createElement("button");
+    tracked.className = "track";
+    const other = document.createElement("button");
+    other.id = "other";
+    document.body.append(tracked, other);
+
+    const { cap, events } = makeCapture({ allowSelectors: [".track"] });
+    cap.start();
+    events.length = 0;
+
+    tracked.click();
+    other.click();
+    const clicks = events.filter((e) => e.type === "$autocapture");
+    expect(clicks).toHaveLength(1);
+    expect(clicks[0].data.fingerprint.classes).toContain("track");
+  });
+
+  test("deny wins over allow", () => {
+    const el = document.createElement("button");
+    el.className = "track secret";
+    document.body.appendChild(el);
+
+    const { cap, events } = makeCapture({
+      allowSelectors: [".track"],
+      denySelectors: [".secret"],
+    });
+    cap.start();
+    events.length = 0;
+
+    el.click();
+    expect(events.filter((e) => e.type === "$autocapture")).toHaveLength(0);
+  });
+
+  test("a denied click emits none of its derived events (download / outbound)", () => {
+    const link = document.createElement("a");
+    link.className = "secret";
+    link.href = "https://external.example.com/file.pdf";
+    link.textContent = "Download";
+    document.body.appendChild(link);
+
+    const { cap, events } = makeCapture({ denySelectors: [".secret"] });
+    cap.start();
+    events.length = 0;
+
+    link.click();
+    expect(events).toHaveLength(0);
+  });
+
+  test("an invalid selector is ignored, not thrown", () => {
+    const btn = document.createElement("button");
+    btn.id = "go";
+    document.body.appendChild(btn);
+
+    const { cap, events } = makeCapture({ denySelectors: ["!!!not a selector"] });
+    cap.start();
+    events.length = 0;
+
+    expect(() => btn.click()).not.toThrow();
+    // The bad selector matches nothing, so capture proceeds normally.
+    expect(events.filter((e) => e.type === "$autocapture")).toHaveLength(1);
+  });
+});

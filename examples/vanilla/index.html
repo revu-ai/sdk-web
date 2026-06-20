@@ -72,6 +72,16 @@
       font-family: ui-monospace, monospace;
       color: #444;
     }
+
+    #engine-state {
+      background: #0b0b0f;
+      color: #7fd1ff;
+      padding: 1rem;
+      border-radius: 8px;
+      font: 12px/1.6 ui-monospace, monospace;
+      white-space: pre-wrap;
+      overflow: auto;
+    }
   </style>
 </head>
 
@@ -170,6 +180,45 @@
   <button id="checkout">Simulate checkout_completed</button>
   <button id="export">Simulate report_exported</button>
 
+  <h2>Consent (categories + GPC)</h2>
+  <p class="muted">
+    Capture is gated on a per-category consent state. Only <code>analytics</code> gates
+    capture; <code>marketing</code> and <code>functional</code> are declarative and ride
+    along on every event as <code>$consent</code> for the server to honor. <code>optOut()</code>
+    / <code>optIn()</code> are aliases for denying / granting <code>analytics</code>. Watch
+    the Engine state panel below update as you toggle.
+  </p>
+  <button id="deny-marketing">Deny marketing</button>
+  <button id="grant-marketing">Grant marketing</button>
+  <button id="opt-out">Opt out (deny analytics - suppresses all capture)</button>
+  <button id="opt-in">Opt in (grant analytics)</button>
+
+  <h2>Attribution (first touch + last touch)</h2>
+  <p class="muted">
+    The SDK persists the campaign that first acquired the visitor
+    (<code>$initial_utm_*</code>) and the most recent one (<code>$utm_*</code>), so a
+    conversion pages or days later still carries them. To see it, reload this page with
+    campaign params, then click anything and watch the Engine state panel:
+  </p>
+  <a class="link" href="?utm_source=newsletter&utm_medium=email&utm_campaign=summer">
+    Reload with ?utm_source=newsletter&utm_campaign=summer
+  </a>
+
+  <h2>Selector filtering + beforeSend</h2>
+  <p class="muted">
+    <code>#do-not-track</code> is in <code>autocaptureDenySelectors</code>, so clicking it
+    emits <em>nothing</em> (compare the unmasked button, which redacts but still emits).
+    <code>debug_noise</code> is dropped by the <code>beforeSend</code> hook. Every event
+    that does ship is enriched by <code>beforeSend</code> with
+    <code>properties.demo_enriched = true</code>.
+  </p>
+  <button id="do-not-track">Not tracked (deny selector)</button>
+  <button id="noise">Fire debug_noise (dropped by beforeSend)</button>
+
+  <h2>Engine state (from the latest event)</h2>
+  <p class="muted">Live <code>$consent</code>, <code>$gpc</code>, and attribution off the most recent event.</p>
+  <pre id="engine-state">(interact to populate)</pre>
+
   <h2>Captured events</h2>
   <div id="log"></div>
 
@@ -205,14 +254,57 @@
       apiKey: "revu_pk_demo_replace_me",
       host: isLocalDemo ? localHost : "https://api.revu.ai",
       debug: true,
+      // Global Privacy Control: honoring it is a jurisdictional choice, so it
+      // is off by default. The $gpc signal is stamped on every event either
+      // way (see the Engine state panel below).
+      honorGpc: false,
+      // Selector filtering: clicks on (or inside) these selectors are never
+      // autocaptured - not even the events derived from them. A stronger
+      // control than data-revu-mask, which still emits a redacted event.
+      autocaptureDenySelectors: ["#do-not-track"],
+      // beforeSend: the last-mile hook. Enrich every event with host context
+      // the SDK cannot know, and drop noisy events entirely. Returning null
+      // drops; returning the event (mutated or replaced) sends it.
+      beforeSend: (event) => {
+        event.properties.demo_enriched = true;
+        if (event.event_type === "debug_noise") return null;
+        return event;
+      },
       onEvent: (e) => {
         const line = document.createElement("div");
         line.className = "row";
         const detail = e.fingerprint?.text ?? e.properties?.path ?? e.properties?.url ?? "";
         line.textContent = `${e.event_type.padEnd(20)} ${e.screen}  ${detail}`;
         log.prepend(line);
+        renderEngineState(e.properties || {});
       },
     });
+
+    // Mirror the consent / GPC / attribution properties off the latest event
+    // into a live panel so the three are visible without opening the console.
+    const engineState = document.getElementById("engine-state");
+    function renderEngineState(props) {
+      const attribution = {};
+      for (const key of Object.keys(props)) {
+        if (
+          key.startsWith("$initial_utm") ||
+          key.startsWith("$utm_") ||
+          key === "$gclid" ||
+          key === "$fbclid" ||
+          key === "$initial_gclid" ||
+          key === "$initial_fbclid" ||
+          key === "$initial_landing_path" ||
+          key === "$initial_seen_at"
+        ) {
+          attribution[key] = props[key];
+        }
+      }
+      engineState.textContent = JSON.stringify(
+        { $consent: props.$consent, $gpc: props.$gpc ?? "(not advertised)", attribution },
+        null,
+        2,
+      );
+    }
 
     // Identity demos. identify() replaces the auto-assigned userId with
     // the host's real id; reset() rotates to a fresh auto id and emits
@@ -251,6 +343,33 @@
     });
     document.getElementById("export").addEventListener("click", () => {
       revu.capture("report_exported", { format: "pdf", pages: 12 });
+    });
+
+    // Consent demos. set() merges a partial category map; only analytics gates
+    // capture. We fire a probe event after the marketing toggles so the Engine
+    // state panel reflects the new $consent immediately. optOut/optIn flip the
+    // analytics category - after optOut, capture is suppressed, so the stream
+    // and panel intentionally stop updating until you opt back in.
+    document.getElementById("deny-marketing").addEventListener("click", () => {
+      revu.consent.set({ marketing: "denied" });
+      revu.capture("consent_updated");
+    });
+    document.getElementById("grant-marketing").addEventListener("click", () => {
+      revu.consent.set({ marketing: "granted" });
+      revu.capture("consent_updated");
+    });
+    document.getElementById("opt-out").addEventListener("click", () => revu.optOut());
+    document.getElementById("opt-in").addEventListener("click", () => {
+      revu.optIn();
+      revu.capture("consent_updated");
+    });
+
+    // Selector filtering + beforeSend demos. The deny-selector button emits
+    // nothing (filtered in the capture layer). debug_noise is built but the
+    // beforeSend hook returns null, so it never reaches the queue - you should
+    // NOT see either of these in the stream.
+    document.getElementById("noise").addEventListener("click", () => {
+      revu.capture("debug_noise", { note: "you should NOT see this in the stream" });
     });
   </script>
 </body>
