@@ -31,6 +31,7 @@
 import { beforeEach, describe, expect, test } from "bun:test";
 import { existsSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
+import { noopFetch } from "./setup.js";
 
 const IIFE_PATH = fileURLToPath(
   new URL("../dist/iife/index.js", import.meta.url)
@@ -59,10 +60,20 @@ describe.skipIf(!bundleAvailable)(
      * effect. `new Function(...)` is the standard way to evaluate a
      * non-module script string without contaminating the module's import
      * graph.
+     *
+     * `fetch` is passed as a parameter so the single bare `fetch(...)` call
+     * in the bundle's transport binds lexically to this hermetic no-op,
+     * including from the pagehide / visibilitychange flush listeners the
+     * client registers (the SDK exposes no teardown, so those listeners
+     * outlive this test). Without it, a later file that dispatches those
+     * events makes the bundle fire a real request to its `example.invalid`
+     * host, whose async rejection fails an unrelated file under CI timing.
+     * happy-dom provides no `navigator.sendBeacon`, so the transport always
+     * takes this fetch path.
      * @param {string} code
      */
     function evalBundle(code) {
-      new Function(code)();
+      new Function("fetch", code)(noopFetch);
     }
 
     test("executes without throwing", () => {
