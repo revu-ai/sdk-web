@@ -133,12 +133,18 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           version="${GITHUB_REF_NAME#v}"
+          # gh release upload names each asset by its basename, so the ESM and
+          # IIFE bundles (both `.../index.js`, and both `.../index.js.map`)
+          # would collide and the upload would 404. Stage copies with distinct,
+          # descriptive names first.
+          mkdir -p release-assets
+          cp packages/core/dist/index.js          "release-assets/revu-behavior-esm-${version}.js"
+          cp packages/core/dist/index.js.map      "release-assets/revu-behavior-esm-${version}.js.map"
+          cp packages/core/dist/iife/index.js     "release-assets/revu-behavior-iife-${version}.js"
+          cp packages/core/dist/iife/index.js.map "release-assets/revu-behavior-iife-${version}.js.map"
           gh release upload "$GITHUB_REF_NAME" \
             "behavior-${version}.tar.gz" \
-            packages/core/dist/iife/index.js \
-            packages/core/dist/iife/index.js.map \
-            packages/core/dist/index.js \
-            packages/core/dist/index.js.map \
+            release-assets/* \
             --clobber
 
       # Append the SRI block to the release body, preserving whatever
