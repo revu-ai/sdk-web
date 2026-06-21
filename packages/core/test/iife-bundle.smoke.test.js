@@ -74,19 +74,33 @@ describe.skipIf(!bundleAvailable)(
      * non-module script string without contaminating the module's import
      * graph.
      *
-     * `fetch` is passed as a parameter so the single bare `fetch(...)` call
-     * in the bundle's transport binds lexically to this hermetic no-op,
-     * including from the pagehide / visibilitychange flush listeners the
-     * client registers (the SDK exposes no teardown, so those listeners
-     * outlive this test). Without it, a later file that dispatches those
-     * events makes the bundle fire a real request to its `example.invalid`
-     * host, whose async rejection fails an unrelated file under CI timing.
-     * happy-dom provides no `navigator.sendBeacon`, so the transport always
-     * takes this fetch path.
+     * `fetch` and `navigator` are passed as parameters so the bundle's
+     * network calls bind lexically to hermetic stand-ins, including from the
+     * pagehide / visibilitychange flush listeners the client registers (the
+     * SDK exposes no teardown, so those listeners outlive this test). Without
+     * this, a later file that dispatches those events makes the bundle fire a
+     * real request to its `example.invalid` host, whose async rejection fails
+     * an unrelated file under CI timing.
+     *
+     *   - `fetch` -> a no-op resolving an empty 200, so the normal flush path
+     *     makes no request.
+     *   - `navigator` -> a proxy identical to the real one but with
+     *     `sendBeacon` removed, so the terminal-flush guard
+     *     (`typeof navigator.sendBeacon === "function"`) is false and the
+     *     transport falls through to the no-op `fetch` instead of the
+     *     Bun-native `sendBeacon`, which performs real network I/O. Other
+     *     navigator reads (userAgent, language, onLine, ...) pass through.
      * @param {string} code
      */
     function evalBundle(code) {
-      new Function("fetch", code)(noopFetch);
+      const nav = new Proxy(/** @type {any} */ (globalThis.navigator), {
+        get(target, prop) {
+          if (prop === "sendBeacon") return undefined;
+          const value = target[prop];
+          return typeof value === "function" ? value.bind(target) : value;
+        },
+      });
+      new Function("fetch", "navigator", code)(noopFetch, nav);
     }
 
     test("executes without throwing", () => {
