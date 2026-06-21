@@ -52,6 +52,19 @@ describe.skipIf(!bundleAvailable)(
      */
     beforeEach(() => {
       /** @type {Record<string, unknown>} */ (globalThis).revu = undefined;
+      // Belt-and-suspenders hermetic network. `evalBundle` injects `fetch` as
+      // a parameter so a bundle that calls bare `fetch(...)` binds to the
+      // no-op, but a different minifier (e.g. a newer Bun on CI) may emit
+      // `globalThis.fetch` / `window.fetch` instead, which the parameter does
+      // not shadow. Point those at the no-op too, and deliberately do NOT
+      // restore: the live clients this file creates register pagehide /
+      // visibilitychange flush listeners that outlive the test (the SDK has no
+      // teardown), so a later file dispatching those events must still hit the
+      // no-op, never a real request to the smoke host.
+      globalThis.fetch = /** @type {typeof fetch} */ (/** @type {unknown} */ (noopFetch));
+      if (globalThis.window) {
+        /** @type {any} */ (globalThis.window).fetch = noopFetch;
+      }
     });
 
     /**
