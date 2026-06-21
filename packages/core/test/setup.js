@@ -23,7 +23,21 @@ if (typeof globalThis.window === "undefined") {
 // triggers a real flush to `https://example.invalid/v1/behavior/events`. The
 // resulting async rejection surfaces as an "unhandled error between tests" and
 // fails the unrelated file (seen in CI, where scheduling differs from local).
+//
 // Stub `fetch` with a successful no-op so no test makes a real request. Tests
 // that assert transport behavior overwrite `globalThis.fetch` with their own
-// mock and restore it to this baseline, so this does not weaken them.
-globalThis.fetch = () => Promise.resolve(new Response("", { status: 200 }));
+// mock; they restore THIS no-op (importing it) rather than capturing whatever
+// `globalThis.fetch` was, so the real happy-dom fetch is never re-armed for a
+// later file's leaked listener.
+
+/**
+ * Hermetic no-op replacement for `fetch`: resolves a successful empty 200
+ * response without any network I/O. The default `globalThis.fetch` for the
+ * whole test run, and the restore target after a test installs its own mock.
+ * @returns {Promise<Response>}
+ */
+export function noopFetch() {
+  return Promise.resolve(new Response("", { status: 200 }));
+}
+
+globalThis.fetch = /** @type {typeof fetch} */ (/** @type {unknown} */ (noopFetch));

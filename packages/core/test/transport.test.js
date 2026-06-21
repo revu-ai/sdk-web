@@ -12,6 +12,7 @@
 
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 import { Transport } from "../src/transport.js";
+import { noopFetch } from "./setup.js";
 
 /**
  * @param {number} n
@@ -59,16 +60,15 @@ function mockFetch(/** @type {() => Promise<Response>} */ handler) {
   return fn;
 }
 
-/** Original fetch and sendBeacon, restored after each test. */
-const ORIGINAL_FETCH = globalThis.fetch;
-
 beforeEach(() => {
   // Clear durable queue so each test starts empty.
   localStorage.clear();
 });
 
 afterEach(() => {
-  globalThis.fetch = ORIGINAL_FETCH;
+  // Restore the hermetic no-op (NOT a captured original), so a leaked listener
+  // in a later file can never reach the real happy-dom fetch. See test/setup.js.
+  globalThis.fetch = /** @type {typeof fetch} */ (/** @type {unknown} */ (noopFetch));
   // sendBeacon is patched on a per-test basis below; reset to undefined so the
   // next test starts from a known state (happy-dom does not provide one).
   delete (/** @type {any} */ (navigator).sendBeacon);
