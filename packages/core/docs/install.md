@@ -46,9 +46,9 @@ Pick the form that matches your stability needs.
 
 | URL form | Resolves to | Cache | Use when |
 |---|---|---|---|
-| `cdn.revu.ai/behavior/1.2.3/index.js` | The exact 1.2.3 release | One year, immutable | Maximum stability; you opt into every version bump by editing the URL. |
-| `cdn.revu.ai/behavior/latest/index.js` | The newest published release | Five minutes | You want updates automatically and accept the responsibility of testing across releases. |
-| `cdn.revu.ai/behavior` | Same as `latest/index.js`, shortest form | Five minutes | Same as above, shortest URL. The snippet above uses this form. |
+| `cdn.revu.ai/behavior/1.2.3` | The exact 1.2.3 release | One year, immutable | Maximum stability; you opt into every version bump by editing the URL. |
+| `cdn.revu.ai/behavior/latest` | The newest published release | Five minutes | You want updates automatically and accept the responsibility of testing across releases. |
+| `cdn.revu.ai/behavior` | Same as `behavior/latest`, shortest form | Five minutes | Same as above, shortest URL. The snippet above uses this form. |
 
 Each pinned URL is paired with `.map` for source maps. The response
 also carries a `Content-Encoding` of `br` or `gzip` when your browser
@@ -65,7 +65,7 @@ every release.
 ```html
 <script
   async
-  src="https://cdn.revu.ai/behavior/1.2.3/index.js"
+  src="https://cdn.revu.ai/behavior/1.2.3"
   integrity="sha384-..."
   crossorigin="anonymous"
 ></script>

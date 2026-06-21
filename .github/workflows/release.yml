@@ -156,7 +156,7 @@ jobs:
             echo ""
             echo "Pin the script tag with \`integrity\` when loading from the CDN:"
             echo ""
-            echo "- IIFE (\`https://cdn.revu.ai/behavior/${version}/index.js\`): \`${iife_sri}\`"
+            echo "- IIFE (\`https://cdn.revu.ai/behavior/${version}\`): \`${iife_sri}\`"
             echo "- ESM bundle (\`@revu-ai/core@${version}\`): \`${esm_sri}\`"
           } > combined.md
           gh release edit "$GITHUB_REF_NAME" --notes-file combined.md

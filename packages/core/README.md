@@ -61,8 +61,12 @@ Or load it directly from `cdn.revu.ai` (no build step required, see
 the [script tag quickstart](#plain-html-script-tag-no-bundler)):
 
 ```html
-<script type="module">
-  import revu from "https://cdn.revu.ai/behavior/0.1.0";
+<script async src="https://cdn.revu.ai/behavior/0.1.0"></script>
+<script>
+  window.revu = window.revu || new Proxy({q:[]}, {
+    get: (t, m) => m in t ? t[m] : (...a) => t.q.push([m, ...a]),
+  });
+  revu.init({ apiKey: "revu_pk_..." });
 </script>
 ```
 
@@ -85,22 +89,31 @@ batch fills up. Click anything: a `$autocapture` event is queued.
 
 ### Plain HTML (script tag, no bundler)
 
-The SDK is hosted on `cdn.revu.ai` as ESM. Use the floating
-`latest` URL for getting started:
+Load the SDK with a plain `<script>` tag plus a tiny inline stub that
+queues any early `revu.*` calls until the bundle finishes loading and
+replays them. Use the floating `latest` URL (shortest form) for getting
+started:
 
 ```html
-<script type="module">
-  import revu from "https://cdn.revu.ai/behavior";
+<script async src="https://cdn.revu.ai/behavior"></script>
+<script>
+  window.revu = window.revu || new Proxy({q:[]}, {
+    get: (t, m) => m in t ? t[m] : (...a) => t.q.push([m, ...a]),
+  });
   revu.init({ apiKey: "revu_pk_your_write_key" });
 </script>
 ```
 
 For production, **pin an exact version** so a future SDK release does
-not change the bytes your page loads without warning:
+not change the bytes your page loads without warning (only the `src`
+changes):
 
 ```html
-<script type="module">
-  import revu from "https://cdn.revu.ai/behavior/0.1.0";
+<script async src="https://cdn.revu.ai/behavior/0.1.0"></script>
+<script>
+  window.revu = window.revu || new Proxy({q:[]}, {
+    get: (t, m) => m in t ? t[m] : (...a) => t.q.push([m, ...a]),
+  });
   revu.init({ apiKey: "revu_pk_your_write_key" });
 </script>
 ```
@@ -109,7 +122,7 @@ The CDN sets long-cache headers on pinned URLs (the file at a given
 version never changes), and a short cache TTL on `latest` so a release
 propagates within minutes. Every response is pre-compressed at
 publish time, so a modern browser receives the bundle as brotli
-(typically around 7.9 kB on the wire for the current version).
+(typically around 9 kB on the wire for the current version).
 
 If you would rather self-host, copy
 `node_modules/@revu-ai/core/dist/index.js` into your own asset
