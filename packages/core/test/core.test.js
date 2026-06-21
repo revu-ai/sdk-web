@@ -5,7 +5,7 @@
 
 import { describe, expect, test } from "bun:test";
 import { resolveConfig } from "../src/config.js";
-import { hashUint32, safe, scrubUrl, truncate, uuid } from "../src/utils.js";
+import { hashUint32, safe, scrubFragment, scrubUrl, truncate, uuid } from "../src/utils.js";
 
 describe("config", () => {
   test("applies defaults over a minimal config", () => {
@@ -151,6 +151,34 @@ describe("utils", () => {
     expect(scrubUrl("")).toBe("");
     // @ts-expect-error - intentionally non-string
     expect(scrubUrl(null)).toBe(null);
+  });
+
+  test("scrubUrl redacts credential params carried in the URL fragment", () => {
+    // OAuth/OIDC implicit flow returns tokens after the '#'.
+    const implicit = scrubUrl(
+      "https://app.example.com/cb#access_token=SECRET&id_token=SECRET2&token_type=Bearer&expires_in=3600",
+    );
+    expect(implicit).not.toContain("SECRET");
+    expect(implicit).toContain("expires_in=3600"); // benign fragment param preserved
+    // Hash-router with a query: route preserved, token redacted.
+    const routed = scrubUrl("https://app.example.com/#/account?session_token=LEAK&tab=billing");
+    expect(routed).not.toContain("LEAK");
+    expect(routed).toContain("/account");
+    expect(routed).toContain("tab=billing");
+  });
+
+  test("scrubFragment leaves non-credential fragments untouched", () => {
+    expect(scrubFragment("#/pricing")).toBe("#/pricing"); // hash-router path
+    expect(scrubFragment("#section-2")).toBe("#section-2"); // anchor
+    expect(scrubFragment("")).toBe(""); // no fragment
+    expect(scrubFragment("#/users?tab=2")).toBe("#/users?tab=2"); // benign query param
+  });
+
+  test("scrubFragment redacts sensitive params, preserving the given '#' form", () => {
+    expect(scrubFragment("#access_token=abc")).not.toContain("abc");
+    expect(scrubFragment("access_token=abc")).not.toContain("abc"); // no leading '#'
+    expect(scrubFragment("#token=abc").charAt(0)).toBe("#");
+    expect(scrubFragment("token=abc").charAt(0)).not.toBe("#");
   });
 
   test("hashUint32 is deterministic and an unsigned 32-bit integer", () => {

@@ -32,6 +32,7 @@ export class RevuClient {
       persistentStorage: config.persistentStorage,
       cookieDomain: config.cookieDomain,
       sessionTimeoutMs: config.sessionTimeoutMs,
+      sessionMaxMs: config.sessionMaxMs,
     });
     this.context = new Context({ environment: config.environment });
     // One first-party store shared by the runtime-state owners (consent,

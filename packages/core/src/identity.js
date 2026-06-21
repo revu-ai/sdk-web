@@ -36,6 +36,7 @@ const ANON_KEY = "revu_anonymous_id";
 const USER_KEY = "revu_user_id";
 const SESSION_KEY = "revu_session_id";
 const SESSION_SEEN_KEY = "revu_session_last_seen";
+const SESSION_START_KEY = "revu_session_started_at";
 // `is_new_visitor` and `first_seen_at` are deliberately NOT stored or
 // stamped client-side. They are computed server-side from the
 // `behavior.visitors` rollup table where the API can keep them
@@ -43,6 +44,13 @@ const SESSION_SEEN_KEY = "revu_session_last_seen";
 // definition changes (see invariant #6: "The SDK only captures").
 
 const DEFAULT_SESSION_TIMEOUT_MS = 30 * 60 * 1000;
+/**
+ * Absolute session-length cap. A session rotates once it has been alive this
+ * long even if it never went idle, so a long-lived tab, a kiosk, or an
+ * always-on dashboard does not accumulate one multi-day session that skews
+ * duration and engagement. Set to 0 to disable the cap.
+ */
+const DEFAULT_SESSION_MAX_MS = 24 * 60 * 60 * 1000;
 /**
  * Throttle window for persisting session.last_seen. We update the in-memory
  * timestamp on every event but only write through to storage once per ~5 s,
@@ -76,6 +84,11 @@ export class Identity {
    *   session can sit idle before the next construction rotates to a
    *   fresh id. Set to 0 to disable continuation entirely (every load
    *   gets a brand new sessionId, matching pre-continuation behavior).
+   * @param {number} [options.sessionMaxMs=86400000] Absolute cap on a
+   *   session's total length. Even a continuously-active session rotates
+   *   once it has been alive this long (default 24 h), so a long-lived tab
+   *   or kiosk does not accumulate one multi-day session. Set to 0 to
+   *   disable the cap.
    */
   constructor(options = {}) {
     /** @type {boolean} */
@@ -84,6 +97,10 @@ export class Identity {
     this.sessionTimeoutMs = typeof options.sessionTimeoutMs === "number"
       ? options.sessionTimeoutMs
       : DEFAULT_SESSION_TIMEOUT_MS;
+    /** @type {number} Absolute session-length cap; 0 disables it. */
+    this.sessionMaxMs = typeof options.sessionMaxMs === "number"
+      ? options.sessionMaxMs
+      : DEFAULT_SESSION_MAX_MS;
     /** @type {import("./storage.js").Storage} */
     this._storage = createStorage({
       mode: options.persistentStorage,
@@ -145,9 +162,21 @@ export class Identity {
     const persistedSeen = this._storage.read(SESSION_SEEN_KEY);
     if (persistedId && persistedSeen) {
       const lastSeenMs = Number.parseInt(persistedSeen, 10);
+      // Absolute-age cap: rotate even a continuously-active session once it
+      // exceeds sessionMaxMs. Disabled at <= 0, and skipped when no start
+      // timestamp is stored (a session persisted before this cap existed -
+      // left alone so an upgrade does not force-rotate it; the next fresh
+      // session stamps a start time).
+      const startedRaw = this._storage.read(SESSION_START_KEY);
+      const startedMs = startedRaw ? Number.parseInt(startedRaw, 10) : NaN;
+      const withinMaxAge =
+        this.sessionMaxMs <= 0 ||
+        !Number.isFinite(startedMs) ||
+        Date.now() - startedMs < this.sessionMaxMs;
       if (
         Number.isFinite(lastSeenMs) &&
-        Date.now() - lastSeenMs < this.sessionTimeoutMs
+        Date.now() - lastSeenMs < this.sessionTimeoutMs &&
+        withinMaxAge
       ) {
         // Seed the throttle from the persisted timestamp so the FIRST
         // touchSession() after restore correctly waits the throttle window
@@ -160,6 +189,7 @@ export class Identity {
     const now = Date.now();
     this._storage.write(SESSION_KEY, fresh);
     this._storage.write(SESSION_SEEN_KEY, String(now));
+    this._storage.write(SESSION_START_KEY, String(now));
     this._sessionLastTouchPersisted = now;
     return fresh;
   }
@@ -219,6 +249,7 @@ export class Identity {
       const now = Date.now();
       this._storage.write(SESSION_KEY, this.sessionId);
       this._storage.write(SESSION_SEEN_KEY, String(now));
+      this._storage.write(SESSION_START_KEY, String(now));
       this._sessionLastTouchPersisted = now;
     }
   }

@@ -20,6 +20,7 @@ const DEFAULTS = {
   captureAttention: true,
   idleTimeoutMs: 30000,
   sessionTimeoutMs: 30 * 60 * 1000,
+  sessionMaxMs: 24 * 60 * 60 * 1000,
   sampleRate: 1,
   honorGpc: false,
   beforeSend: null,

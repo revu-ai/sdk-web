@@ -151,10 +151,10 @@ When to skip it: anything autocapture already names. A click on a `<button>Get a
 
 | Metric | Current | Budget |
 |---|---|---|
-| Minified | **31.66 kB** | 32 kB |
-| Gzipped on wire | **9.99 kB** | 12 kB |
+| Minified | **32.41 kB** | 34 kB |
+| Gzipped on wire | **10.22 kB** | 12 kB |
 
-Both metrics are CI gates (`bun run size`, via `size-limit`). Gzipped size is the transfer cost users pay; minified size is the parse and compile cost the browser pays on low-end devices. The 32 / 12 kB ceiling is a deliberate constraint so the SDK is light enough to cold-load on any page without an opt-in budget. New capabilities ship as opt-in modules so the lean core stays lean, and each module is independently budgeted so the full default-on cold-load stays tight as the SDK grows.
+Both metrics are CI gates (`bun run size`, via `size-limit`). Gzipped size is the transfer cost users pay; minified size is the parse and compile cost the browser pays on low-end devices. The 34 / 12 kB ceiling is a deliberate constraint so the SDK is light enough to cold-load on any page without an opt-in budget. New capabilities ship as opt-in modules so the lean core stays lean, and each module is independently budgeted so the full default-on cold-load stays tight as the SDK grows.
 
 ## Structure
 

@@ -173,13 +173,15 @@ const SENSITIVE_PARAM_KEY =
 const REDACTED = "[redacted]";
 
 /**
- * Redact the VALUES of sensitive query parameters in an absolute URL while
- * leaving the path, fragment, and every other parameter intact. Capturing a
- * pageview should never ship a password-reset token or an email address that
- * happened to ride in the query string, but it must keep UTM / click-id
- * params so server-side attribution still works - so this scrubs by key,
- * not wholesale. Returns the input unchanged when it has no query string, is
- * not an absolute URL, or is not a string. Never throws.
+ * Redact the VALUES of sensitive parameters in an absolute URL - in both the
+ * query string AND the fragment - while leaving the path and every
+ * non-sensitive parameter intact. Capturing a pageview should never ship a
+ * password-reset token or an email address that happened to ride in the URL,
+ * but it must keep UTM / click-id params so server-side attribution still
+ * works, so this scrubs by key, not wholesale. The fragment is covered
+ * because the OAuth/OIDC implicit flow returns tokens after the `#`
+ * (`#access_token=...`). Returns the input unchanged when nothing sensitive is
+ * present, it is not an absolute URL, or it is not a string. Never throws.
  *
  * @param {string} url
  * @returns {string}
@@ -188,7 +190,6 @@ export function scrubUrl(url) {
   if (typeof url !== "string" || url.length === 0) return url;
   try {
     const parsed = new URL(url);
-    if (!parsed.search) return url;
     let changed = false;
     // Snapshot keys before mutating; set() collapses duplicates, which is
     // fine for the credential-bearing params we target.
@@ -198,11 +199,57 @@ export function scrubUrl(url) {
         changed = true;
       }
     }
+    // Fragment credentials (implicit-flow tokens, hash-router query) never
+    // touch `search`, so scrub them separately.
+    const scrubbedHash = scrubFragment(parsed.hash);
+    if (scrubbedHash !== parsed.hash) {
+      parsed.hash = scrubbedHash;
+      changed = true;
+    }
     return changed ? parsed.toString() : url;
   } catch {
     // Relative or malformed URL: nothing safe to parse, leave it as-is.
     return url;
   }
+}
+
+/**
+ * Redact sensitive `key=value` params carried in a URL fragment, leaving the
+ * route portion of a hash-router path and any non-sensitive params intact.
+ * Handles both `#access_token=...` (OAuth/OIDC implicit flow, no leading `?`)
+ * and `#/route?token=...` (hash router with a query). Returns the fragment
+ * unchanged when it carries no `key=value` pairs (a plain `#/route` or
+ * `#anchor`) or no sensitive key, so non-credential fragments are never
+ * normalized. Accepts a fragment with or without the leading `#` and preserves
+ * whichever form it was given. Never throws.
+ *
+ * @param {string} hash
+ * @returns {string}
+ */
+export function scrubFragment(hash) {
+  if (!hash || hash.indexOf("=") === -1) return hash;
+  const hasHashPrefix = hash.charAt(0) === "#";
+  const body = hasHashPrefix ? hash.slice(1) : hash;
+  const qIndex = body.indexOf("?");
+  const routePart = qIndex === -1 ? "" : body.slice(0, qIndex);
+  const queryPart = qIndex === -1 ? body : body.slice(qIndex + 1);
+  if (queryPart.indexOf("=") === -1) return hash;
+  let params;
+  try {
+    params = new URLSearchParams(queryPart);
+  } catch {
+    return hash;
+  }
+  let changed = false;
+  for (const key of [...params.keys()]) {
+    if (SENSITIVE_PARAM_KEY.test(key)) {
+      params.set(key, REDACTED);
+      changed = true;
+    }
+  }
+  if (!changed) return hash;
+  const rebuiltBody = qIndex === -1 ? params.toString() : `${routePart}?${params.toString()}`;
+  return hasHashPrefix ? `#${rebuiltBody}` : rebuiltBody;
 }
 
 /**
@@ -228,11 +275,13 @@ export function readGpc() {
  * The current "route" path used as the screen/page identifier. Combines
  * pathname with the hash so a hash-router app (e.g. `/#/pricing`) treats each
  * hash as a distinct route, and plain anchor navigation (e.g. `#section-2`)
- * is also visible as a separate screen. SSR-safe: returns "" when there is
- * no `location`.
+ * is also visible as a separate screen. The hash is run through
+ * {@link scrubFragment} so a credential-bearing fragment (an OAuth
+ * implicit-flow `#access_token=...` landing) never lands in `screen` /
+ * `properties.path`. SSR-safe: returns "" when there is no `location`.
  * @returns {string}
  */
 export function routePath() {
   if (typeof location === "undefined") return "";
-  return location.pathname + location.hash;
+  return location.pathname + scrubFragment(location.hash);
 }

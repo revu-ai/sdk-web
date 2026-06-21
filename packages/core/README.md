@@ -3,8 +3,8 @@
 [![npm](https://img.shields.io/npm/v/@revu-ai/core.svg)](https://www.npmjs.com/package/@revu-ai/core)
 [![ci](https://github.com/revu-ai/sdk-web/actions/workflows/ci.yml/badge.svg)](https://github.com/revu-ai/sdk-web/actions/workflows/ci.yml)
 [![license](https://img.shields.io/npm/l/@revu-ai/core.svg)](https://github.com/revu-ai/sdk-web/blob/main/LICENSE)
-[![size](https://img.shields.io/badge/min-31.66%20kB-blue)](#size)
-[![gzip](https://img.shields.io/badge/gzip-9.99%20kB-blue)](#size)
+[![size](https://img.shields.io/badge/min-32.41%20kB-blue)](#size)
+[![gzip](https://img.shields.io/badge/gzip-10.22%20kB-blue)](#size)
 
 The lean capture core of the REVU Web SDK. One line in your page
 captures pageviews, clicks, scroll depth, form submits, downloads,
@@ -25,7 +25,7 @@ revu.capture("checkout_completed", { plan: "pro" }); // optional explicit event
 revu.reset(); // on logout
 ```
 
-ESM only. **Zero runtime dependencies.** 31.66 kB minified, 9.99 kB gzipped.
+ESM only. **Zero runtime dependencies.** 32.41 kB minified, 10.22 kB gzipped.
 
 ## Documentation
 
@@ -183,8 +183,8 @@ captured on those engines simply omit `context.connection_type` and
 
 | Metric          | Current | Budget |
 | --------------- | ------- | ------ |
-| Minified        | 31.66 kB | 32 kB  |
-| Gzipped on wire | 9.99 kB  | 12 kB  |
+| Minified        | 32.41 kB | 34 kB  |
+| Gzipped on wire | 10.22 kB  | 12 kB  |
 
 Both axes are CI gates (`bun run size`). Gzipped is the transfer cost
 users pay; minified is the parse and compile cost the browser pays on
@@ -195,7 +195,7 @@ When the SDK is served from `cdn.revu.ai`, the actual wire cost is
 lower than the gzipped budget: the CDN pre-compresses each asset with
 brotli at publish time and serves the brotli variant to every browser
 that supports it (every modern browser does). The current bundle ships
-as around 8.7 kB on the wire for browsers that advertise brotli, with
+as around 9 kB on the wire for browsers that advertise brotli, with
 gzip as the fallback.
 
 ## Versioning and stability

@@ -286,6 +286,49 @@ describe("Identity > session continuation", () => {
     });
   });
 
+  const SESSION_START_KEY = "revu_session_started_at";
+
+  test("an active session rotates once it exceeds sessionMaxMs (absolute cap)", () => {
+    withMockClock((advance) => {
+      const opts = { ...LS_ONLY, sessionTimeoutMs: 60_000, sessionMaxMs: 100_000 };
+      const first = new Identity(opts);
+      const original = first.sessionId;
+      // Keep it continuously active across the cap: touch every 40 s (inside
+      // the 60 s idle window) so only the absolute cap can trigger rotation.
+      advance(40_000); first.touchSession();
+      advance(40_000); first.touchSession();
+      advance(40_000); // 120 s since start, 40 s since last touch (still active)
+      const reloaded = new Identity(opts);
+      expect(reloaded.sessionId).not.toBe(original); // rotated by the cap
+    });
+  });
+
+  test("sessionMaxMs: 0 disables the cap - an active session continues indefinitely", () => {
+    withMockClock((advance) => {
+      const opts = { ...LS_ONLY, sessionTimeoutMs: 60_000, sessionMaxMs: 0 };
+      const first = new Identity(opts);
+      const original = first.sessionId;
+      advance(40_000); first.touchSession();
+      advance(40_000); first.touchSession();
+      advance(40_000);
+      const reloaded = new Identity(opts);
+      expect(reloaded.sessionId).toBe(original); // no cap, still continuing
+    });
+  });
+
+  test("a legacy session with no start timestamp is not force-rotated by the cap", () => {
+    withMockClock(() => {
+      // Simulate a session persisted by a pre-cap build: id + recent last_seen,
+      // but no started_at key.
+      const now = Date.now();
+      localStorage.setItem(SESSION_KEY, "legacy-session");
+      localStorage.setItem(SESSION_SEEN_KEY, String(now));
+      expect(localStorage.getItem(SESSION_START_KEY)).toBeNull();
+      const id = new Identity({ ...LS_ONLY, sessionTimeoutMs: 60_000, sessionMaxMs: 100_000 });
+      expect(id.sessionId).toBe("legacy-session"); // continued, not rotated
+    });
+  });
+
   test("corrupt persisted last_seen (non-numeric) is treated as expired", () => {
     // Defense in depth: a stray value, a buggy older version's write, or
     // a user editing storage by hand should not crash the SDK or restore

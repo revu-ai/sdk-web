@@ -64,10 +64,11 @@ file-download / outbound-link / rage events derived from the click.
 ## URLs and query strings
 
 Captured URLs (the `$pageview` `url`, the referrer, and `$outbound_link` /
-`$file_download` targets) routinely carry secrets in their query string:
-a password-reset token, an OAuth code, an email address in `?email=`. The
-SDK redacts the **values** of sensitive query parameters at the source,
-replacing them with `[redacted]` before the event is built.
+`$file_download` targets) routinely carry secrets in their query string or
+fragment: a password-reset token, an email address in `?email=`, an
+OAuth/OIDC implicit-flow `#access_token=...`. The SDK redacts the
+**values** of sensitive parameters at the source - in both the query and
+the fragment - replacing them with `[redacted]` before the event is built.
 
 The redaction is by parameter name, not wholesale, because the server
 derives campaign attribution (UTM, click ids) from the captured URL. So
@@ -79,7 +80,11 @@ case-insensitively, including `_`/`-`-delimited variants like
 
 This is redaction at source, not a toggle: there is no option to capture
 raw query values. The page identity (`screen` / `path`) is the pathname
-plus hash and never includes the query string at all.
+plus hash and never includes the query string; the hash itself is run
+through the same redaction, so a credential-bearing fragment (an OAuth
+implicit-flow `#access_token=...` landing) never lands in `screen` or
+`path`. Hash-router routes (`#/pricing`) and anchors (`#section`) are
+preserved unchanged.
 
 ## What the SDK does not parse client-side
 
