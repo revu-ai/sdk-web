@@ -184,7 +184,7 @@
   <p class="muted">
     Capture is gated on a per-category consent state. Only <code>analytics</code> gates
     capture; <code>marketing</code> and <code>functional</code> are declarative and ride
-    along on every event as <code>$consent</code> for the server to honor. <code>optOut()</code>
+    along on every event as <code>context.consent</code> for the server to honor. <code>optOut()</code>
     / <code>optIn()</code> are aliases for denying / granting <code>analytics</code>. Watch
     the Engine state panel below update as you toggle.
   </p>
@@ -196,7 +196,7 @@
   <h2>Attribution (first touch + last touch)</h2>
   <p class="muted">
     The SDK persists the campaign that first acquired the visitor
-    (<code>$initial_utm_*</code>) and the most recent one (<code>$utm_*</code>), so a
+    (<code>context.initial_utm_*</code>) and the most recent one (<code>context.utm_*</code>), so a
     conversion pages or days later still carries them. To see it, reload this page with
     campaign params, then click anything and watch the Engine state panel:
   </p>
@@ -216,7 +216,7 @@
   <button id="noise">Fire debug_noise (dropped by beforeSend)</button>
 
   <h2>Engine state (from the latest event)</h2>
-  <p class="muted">Live <code>$consent</code>, <code>$gpc</code>, and attribution off the most recent event.</p>
+  <p class="muted">Live <code>context.consent</code>, <code>context.gpc</code>, and attribution off the most recent event.</p>
   <pre id="engine-state">(interact to populate)</pre>
 
   <h2>Captured events</h2>
@@ -255,7 +255,7 @@
       host: isLocalDemo ? localHost : "https://api.revu.ai",
       debug: true,
       // Global Privacy Control: honoring it is a jurisdictional choice, so it
-      // is off by default. The $gpc signal is stamped on every event either
+      // is off by default. The gpc signal is stamped on every event either
       // way (see the Engine state panel below).
       honorGpc: false,
       // Selector filtering: clicks on (or inside) these selectors are never
@@ -276,31 +276,31 @@
         const detail = e.fingerprint?.text ?? e.properties?.path ?? e.properties?.url ?? "";
         line.textContent = `${e.event_type.padEnd(20)} ${e.screen}  ${detail}`;
         log.prepend(line);
-        renderEngineState(e.properties || {});
+        renderEngineState(e.context || {});
       },
     });
 
-    // Mirror the consent / GPC / attribution properties off the latest event
-    // into a live panel so the three are visible without opening the console.
+    // Mirror the consent / GPC / attribution fields off the latest event's
+    // context bucket into a live panel so they're visible without the console.
     const engineState = document.getElementById("engine-state");
-    function renderEngineState(props) {
+    function renderEngineState(context) {
       const attribution = {};
-      for (const key of Object.keys(props)) {
+      for (const key of Object.keys(context)) {
         if (
-          key.startsWith("$initial_utm") ||
-          key.startsWith("$utm_") ||
-          key === "$gclid" ||
-          key === "$fbclid" ||
-          key === "$initial_gclid" ||
-          key === "$initial_fbclid" ||
-          key === "$initial_landing_path" ||
-          key === "$initial_seen_at"
+          key.startsWith("initial_utm") ||
+          key.startsWith("utm_") ||
+          key === "gclid" ||
+          key === "fbclid" ||
+          key === "initial_gclid" ||
+          key === "initial_fbclid" ||
+          key === "initial_landing_path" ||
+          key === "initial_seen_at"
         ) {
-          attribution[key] = props[key];
+          attribution[key] = context[key];
         }
       }
       engineState.textContent = JSON.stringify(
-        { $consent: props.$consent, $gpc: props.$gpc ?? "(not advertised)", attribution },
+        { consent: context.consent, gpc: context.gpc ?? "(not advertised)", attribution },
         null,
         2,
       );
@@ -347,7 +347,7 @@
 
     // Consent demos. set() merges a partial category map; only analytics gates
     // capture. We fire a probe event after the marketing toggles so the Engine
-    // state panel reflects the new $consent immediately. optOut/optIn flip the
+    // state panel reflects the new consent immediately. optOut/optIn flip the
     // analytics category - after optOut, capture is suppressed, so the stream
     // and panel intentionally stop updating until you opt back in.
     document.getElementById("deny-marketing").addEventListener("click", () => {

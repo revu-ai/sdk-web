@@ -45,10 +45,10 @@ describe("Attribution > first touch", () => {
     const store = memoryStorage();
     const props = new Attribution({ storage: store }).properties();
 
-    expect(props.$initial_utm_source).toBe("google");
-    expect(props.$initial_utm_medium).toBe("cpc");
-    expect(props.$initial_utm_campaign).toBe("summer");
-    expect(props.$initial_gclid).toBe("abc");
+    expect(props.initial_utm_source).toBe("google");
+    expect(props.initial_utm_medium).toBe("cpc");
+    expect(props.initial_utm_campaign).toBe("summer");
+    expect(props.initial_gclid).toBe("abc");
     // Persisted for the next page load / session.
     expect(store.read("revu_attribution_first")).toContain("google");
   });
@@ -56,10 +56,10 @@ describe("Attribution > first touch", () => {
   test("records landing path and time even for a direct visit (no params)", () => {
     history.replaceState({}, "", "/pricing");
     const props = new Attribution({ storage: memoryStorage() }).properties();
-    expect(props.$initial_landing_path).toBe("/pricing");
-    expect(typeof props.$initial_seen_at).toBe("string");
+    expect(props.initial_landing_path).toBe("/pricing");
+    expect(typeof props.initial_seen_at).toBe("string");
     // No campaign params on a direct visit.
-    expect(props.$initial_utm_source).toBeUndefined();
+    expect(props.initial_utm_source).toBeUndefined();
   });
 
   test("is written once and never overwritten by a later campaign", () => {
@@ -71,9 +71,9 @@ describe("Attribution > first touch", () => {
     const props = new Attribution({ storage: store }).properties();
 
     // First touch stays the acquisition campaign...
-    expect(props.$initial_utm_source).toBe("first");
+    expect(props.initial_utm_source).toBe("first");
     // ...while last touch moves to the most recent one.
-    expect(props.$utm_source).toBe("second");
+    expect(props.utm_source).toBe("second");
   });
 });
 
@@ -81,9 +81,9 @@ describe("Attribution > last touch", () => {
   test("stamps the current campaign under the bare $utm_* convention", () => {
     history.replaceState({}, "", "/?utm_source=newsletter&utm_medium=email&fbclid=xyz");
     const props = new Attribution({ storage: memoryStorage() }).properties();
-    expect(props.$utm_source).toBe("newsletter");
-    expect(props.$utm_medium).toBe("email");
-    expect(props.$fbclid).toBe("xyz");
+    expect(props.utm_source).toBe("newsletter");
+    expect(props.utm_medium).toBe("email");
+    expect(props.fbclid).toBe("xyz");
   });
 
   test("updates on a new campaign touch, leaving first touch intact", () => {
@@ -93,8 +93,8 @@ describe("Attribution > last touch", () => {
 
     history.replaceState({}, "", "/?utm_source=beta");
     const props = new Attribution({ storage: store }).properties();
-    expect(props.$initial_utm_source).toBe("alpha");
-    expect(props.$utm_source).toBe("beta");
+    expect(props.initial_utm_source).toBe("alpha");
+    expect(props.utm_source).toBe("beta");
     expect(store.read("revu_attribution_last")).toContain("beta");
   });
 
@@ -133,13 +133,13 @@ describe("Attribution > resilience", () => {
     expect(() => {
       props = new Attribution({ storage: store }).properties();
     }).not.toThrow();
-    expect(props.$initial_utm_source).toBe("recovered");
+    expect(props.initial_utm_source).toBe("recovered");
   });
 
   test("works without a storage facade (in-memory only, never throws)", () => {
     history.replaceState({}, "", "/?utm_source=memoryonly");
     const props = new Attribution().properties();
-    expect(props.$initial_utm_source).toBe("memoryonly");
-    expect(props.$utm_source).toBe("memoryonly");
+    expect(props.initial_utm_source).toBe("memoryonly");
+    expect(props.utm_source).toBe("memoryonly");
   });
 });

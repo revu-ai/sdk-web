@@ -191,38 +191,39 @@ export class RevuClient {
       event_type: eventType,
       screen: routePath(),
       fingerprint: data.fingerprint,
-      // Environment context first so caller-supplied properties
-      // (capture(), capture-layer extras) win on collision: the host
-      // always has the final word over what the SDK auto-populates.
-      // $sdk_version stamps the build that emitted this event so the
-      // server can correlate behavior with SDK versions when
-      // investigating regressions or rolling out fixes.
-      properties: {
+      // Engine environment lives in `context`, the event's own payload in
+      // `properties`. The two are separate top-level buckets, so caller
+      // properties never collide with engine fields (no `$`-prefix needed) and
+      // downstream SQL / warehouse consumers get the de-facto shape.
+      context: {
         ...this.context.build(),
-        // First-touch (`$initial_*`) and last-touch (`$utm_*`) campaign
+        // First-touch (`initial_*`) and last-touch (`utm_*`) campaign
         // attribution, persisted client-side so a conversion pages or days
         // later still carries the campaign that acquired the visitor. Only the
         // keys actually present are stamped, so a direct visitor adds almost
         // nothing.
         ...this.attribution.properties(),
-        $sdk_version: VERSION,
+        // sdk_version stamps the build that emitted this event so the server
+        // can correlate behavior with SDK versions across regressions/rollouts.
+        sdk_version: VERSION,
         // The visitor's per-category consent state at capture time. Only
         // `analytics` gated this event into existence (a denied analytics
         // category suppresses capture entirely above); `marketing` /
         // `functional` ride along so the server can honor the banner choice on
-        // downstream destinations. Session-stable and tiny, so stamping every
-        // event matches how the rest of the engine context is carried.
-        $consent: this.consent.get(),
+        // downstream destinations.
+        consent: this.consent.get(),
         // Stamp the sampling rate so the server can scale aggregates: a kept
         // event counts as 1/sample_rate toward volume estimates. Only on
         // events actually subject to sampling - identity events are exempt
         // (always sent), so stamping them would over-count them and, at
         // sampleRate 0, hand the server a 1/0 scaling factor.
         ...(sampleRate < 1 && !SAMPLING_EXEMPT.has(eventType)
-          ? { $sample_rate: sampleRate }
+          ? { sample_rate: sampleRate }
           : {}),
-        ...(data.properties || {}),
       },
+      // The event's own payload: capture-layer extras (path, depth, form
+      // structure, ...) and caller-supplied custom properties.
+      properties: { ...(data.properties || {}) },
       device_time: nowIso(),
     };
     // beforeSend: a last-mile hook to enrich, redact, or drop an event before

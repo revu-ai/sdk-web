@@ -140,14 +140,17 @@ shape:
     "selector": "button.primary",
     "ordinal": 0
   },
+  "context": {
+    "user_agent": "...",
+    "language": "en-US",
+    "timezone": "Europe/London",
+    "viewport_width": 1440,
+    "viewport_height": 900,
+    "environment": "production",
+    "sdk_version": "0.1.0",
+    "consent": { "analytics": "granted", "marketing": "granted", "functional": "granted" }
+  },
   "properties": {
-    "$user_agent": "...",
-    "$language": "en-US",
-    "$timezone": "Europe/London",
-    "$viewport_width": 1440,
-    "$viewport_height": 900,
-    "$environment": "production",
-    "$sdk_version": "0.1.0",
     "path": "/pricing"
   },
   "device_time": "2026-06-15T10:21:33.014Z"
@@ -174,19 +177,24 @@ shape:
   is a semantic, weighted summary of the clicked element so the server
   can name the action and survive DOM rewrites without an exact
   selector.
-- **`properties`** is where engine context lives (`$`-prefixed) and
-  where your `capture()` properties land (unprefixed). Your properties
-  win on collision. The engine context includes `$user_agent`,
-  `$language`, `$timezone`, `$environment`, `$sdk_version`,
-  `$viewport_width`, `$viewport_height`, `$screen_width`,
-  `$screen_height`, `$screen_pixel_ratio`, `$initial_referrer`, and
-  `$consent` (the per-category consent state), plus
-  `$connection_type`, `$connection_downlink_mbps`, `$connection_rtt_ms`,
-  and `$save_data` when the browser exposes the Network Information API,
-  `$gpc` when the browser advertises a Global Privacy Control signal, and
-  the [attribution](#attribution-first-touch-and-last-touch) fields
-  (`$initial_utm_*` / `$utm_*` and friends) when a visitor arrived from a
+- **`context`** is the engine environment - the signals the SDK
+  auto-populates, describing where the event happened. Keys are
+  unprefixed and live in their own bucket, so they never collide with
+  your `capture()` properties. It includes `user_agent`, `language`,
+  `timezone`, `environment`, `sdk_version`, `viewport_width`,
+  `viewport_height`, `screen_width`, `screen_height`,
+  `screen_pixel_ratio`, `initial_referrer`, and `consent` (the
+  per-category consent state), plus `connection_type`,
+  `connection_downlink_mbps`, `connection_rtt_ms`, and `save_data` when
+  the browser exposes the Network Information API, `gpc` when the browser
+  advertises a Global Privacy Control signal, and the
+  [attribution](#attribution-first-touch-and-last-touch) fields
+  (`initial_utm_*` / `utm_*` and friends) when a visitor arrived from a
   campaign. The example above shows a representative subset.
+- **`properties`** is the event's own payload: the capture layer's
+  per-event fields (`path`, `url`, `depth_percent`, form structure, ...)
+  and the custom properties you pass to `capture()`. Separate from
+  `context`, so the two never collide.
 
 JSDoc in `src/types.js` is the source of truth for the full type. Run
 `bun run types` from the repo root to emit the corresponding `.d.ts`.
@@ -200,16 +208,17 @@ the visitor's lifetime, so a conversion that happens pages or days later
 on a URL with no params still carries the campaign that drove it.
 
 The SDK persists two records (in the same first-party store as identity)
-and stamps both on every event, but only the keys actually present:
+and stamps both into every event's `context`, but only the keys actually
+present:
 
-- **First touch** (`$initial_*`) is written once and never overwritten:
-  the campaign that originally acquired the visitor. Fields:
-  `$initial_utm_source`, `$initial_utm_medium`, `$initial_utm_campaign`,
-  `$initial_utm_term`, `$initial_utm_content`, `$initial_gclid`,
-  `$initial_fbclid`, plus `$initial_landing_path` and `$initial_seen_at`
+- **First touch** (`context.initial_*`) is written once and never
+  overwritten: the campaign that originally acquired the visitor. Fields:
+  `initial_utm_source`, `initial_utm_medium`, `initial_utm_campaign`,
+  `initial_utm_term`, `initial_utm_content`, `initial_gclid`,
+  `initial_fbclid`, plus `initial_landing_path` and `initial_seen_at`
   (recorded even for a direct first visit).
-- **Last touch** (`$utm_source`, `$utm_medium`, `$utm_campaign`,
-  `$utm_term`, `$utm_content`, `$gclid`, `$fbclid`) is rewritten whenever
+- **Last touch** (`context.utm_source`, `utm_medium`, `utm_campaign`,
+  `utm_term`, `utm_content`, `gclid`, `fbclid`) is rewritten whenever
   a new touch occurs - a landing that carries campaign params or arrives
   from an external referrer. Internal navigation does not overwrite it.
 

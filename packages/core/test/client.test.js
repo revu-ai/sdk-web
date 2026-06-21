@@ -51,33 +51,29 @@ beforeEach(() => {
   }
 });
 
-describe("RevuClient > $sdk_version stamping", () => {
-  test("every captured event carries properties.$sdk_version", () => {
+describe("RevuClient > sdk_version stamping", () => {
+  test("every captured event carries context.sdk_version", () => {
     const { client, events } = makeClient();
     client.capture("test_event", { foo: "bar" });
     client.identify("u_42");
 
     expect(events.length).toBeGreaterThan(0);
     for (const event of events) {
-      expect(event.properties.$sdk_version).toBe(VERSION);
+      expect(event.context.sdk_version).toBe(VERSION);
     }
   });
 
-  test("caller-supplied $sdk_version cannot override the engine value", () => {
-    // Engine context is merged first, then caller properties win on
-    // collision (host has the final word, per record() comments). The
-    // version is the one exception we want pinned because lying about
-    // the SDK version would corrupt server-side correlation. The test
-    // here documents current behavior so a future change that flips
-    // the merge order is caught.
+  test("a caller property cannot reach context.sdk_version (separate buckets)", () => {
+    // context (engine) and properties (caller payload) are separate top-level
+    // buckets, so a caller-supplied value lands in properties and can never
+    // overwrite the engine sdk_version in context. This pins the version the
+    // server uses for correlation.
     const { client, events } = makeClient();
-    client.capture("test_event", { $sdk_version: "9.9.9-fake" });
+    client.capture("test_event", { sdk_version: "9.9.9-fake" });
 
     const captured = events.find((e) => e.event_type === "test_event");
-    // Today's merge order lets the caller win. If/when this changes to
-    // pin $sdk_version, flip this assertion. The test exists so the
-    // decision is intentional, not accidental.
-    expect(captured?.properties.$sdk_version).toBe("9.9.9-fake");
+    expect(captured?.context.sdk_version).toBe(VERSION);
+    expect(captured?.properties.sdk_version).toBe("9.9.9-fake");
   });
 });
 
@@ -268,27 +264,28 @@ describe("RevuClient > reset", () => {
   });
 });
 
-describe("RevuClient > environment context", () => {
-  test("every event carries the engine-emitted context properties", () => {
+describe("RevuClient > engine context", () => {
+  test("every event carries the engine-emitted context bucket", () => {
     const { client, events } = makeClient();
     client.capture("Custom Event");
     const e = events.find((ev) => ev.event_type === "Custom Event");
-    expect(e?.properties.$user_agent).toBeDefined();
-    expect(typeof e?.properties.$viewport_width).toBe("number");
-    expect(typeof e?.properties.$online).toBe("boolean");
+    expect(e?.context.user_agent).toBeDefined();
+    expect(typeof e?.context.viewport_width).toBe("number");
+    expect(typeof e?.context.online).toBe("boolean");
   });
 
-  test("caller-supplied properties win over engine context on collision", () => {
-    // A host that explicitly passes a $viewport_width (e.g. tracking a
-    // custom virtualized layout's "logical" width) should not be silently
-    // overwritten by the SDK's auto-sampled value.
+  test("caller properties and engine context are separate buckets (no collision)", () => {
+    // context (engine) and properties (caller payload) are distinct top-level
+    // buckets, so a host passing its own viewport_width lands in properties and
+    // leaves the SDK's auto-sampled context.viewport_width untouched.
     const { client, events } = makeClient();
-    client.capture("Custom Event", { $viewport_width: 9999, foo: "bar" });
+    client.capture("Custom Event", { viewport_width: 9999, foo: "bar" });
     const e = events.find((ev) => ev.event_type === "Custom Event");
-    expect(e?.properties.$viewport_width).toBe(9999);
+    expect(e?.properties.viewport_width).toBe(9999);
     expect(e?.properties.foo).toBe("bar");
-    // Other engine fields still ride along untouched.
-    expect(e?.properties.$user_agent).toBeDefined();
+    expect(typeof e?.context.viewport_width).toBe("number");
+    expect(e?.context.viewport_width).not.toBe(9999);
+    expect(e?.context.user_agent).toBeDefined();
   });
 });
 
@@ -367,9 +364,9 @@ describe("RevuClient > plugins", () => {
     expect(typeof e?.anonymous_id).toBe("string");
     expect(typeof e?.session_id).toBe("string");
     expect(e?.platform).toBe("web");
-    // Environment context is merged in.
-    expect(e?.properties.$user_agent).toBeDefined();
-    // Plugin-supplied property survives the merge.
+    // Engine context bucket is populated.
+    expect(e?.context.user_agent).toBeDefined();
+    // Plugin-supplied property survives in properties.
     expect(e?.properties.foo).toBe("bar");
   });
 
@@ -478,7 +475,7 @@ describe("RevuClient > sampling", () => {
     const { client, events } = sampledClient(1);
     for (let i = 0; i < 10; i++) client.capture(`e${i}`);
     expect(events.length).toBe(10);
-    expect(events.every((e) => e.properties.$sample_rate === undefined)).toBe(true);
+    expect(events.every((e) => e.context.sample_rate === undefined)).toBe(true);
   });
 
   test("sampleRate 0 drops capture/pageview events but never identity events", () => {
@@ -496,7 +493,7 @@ describe("RevuClient > sampling", () => {
     // Exempt events are always sent, so they must NOT carry $sample_rate -
     // stamping it would over-count them (and is a 1/0 hazard at rate 0).
     for (const e of events) {
-      expect(e.properties.$sample_rate).toBeUndefined();
+      expect(e.context.sample_rate).toBeUndefined();
     }
   });
 
@@ -517,7 +514,7 @@ describe("RevuClient > sampling", () => {
     client._sampleKeep = true;
     client.capture("kept");
     const e = events.find((ev) => ev.event_type === "kept");
-    expect(e?.properties.$sample_rate).toBe(0.5);
+    expect(e?.context.sample_rate).toBe(0.5);
   });
 });
 

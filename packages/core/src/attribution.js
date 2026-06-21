@@ -17,9 +17,9 @@
  *     carries campaign params, or one that comes from an external referrer.
  *     Internal navigation does not overwrite it.
  *
- * Stamped on every event (only the keys actually present): first touch as
- * `$initial_*`, last touch as the bare `$utm_*` / `$gclid` / `$fbclid`
- * convention used across the analytics space.
+ * Emitted into the event's `context` bucket (only the keys actually present):
+ * first touch as `initial_*`, last touch as the bare `utm_*` / `gclid` /
+ * `fbclid` convention used across the analytics space.
  *
  * Reading the known, stable `utm_*` / click-id keys via URLSearchParams is
  * cheap and never drifts, so this does not cross the "no parsers shipped to
@@ -95,15 +95,15 @@ export class Attribution {
 
     /** @type {Record<string, unknown>} */
     const props = {};
-    // First touch under `$initial_*`: campaign params plus landing context.
+    // First touch under `initial_*`: campaign params plus landing context.
     for (const key of PARAM_KEYS) {
-      if (first[key] != null) props[`$initial_${key}`] = first[key];
+      if (first[key] != null) props[`initial_${key}`] = first[key];
     }
-    if (first.landing_path != null) props.$initial_landing_path = first.landing_path;
-    if (first.at != null) props.$initial_seen_at = first.at;
-    // Last touch under the bare `$utm_*` / `$gclid` / `$fbclid` convention.
+    if (first.landing_path != null) props.initial_landing_path = first.landing_path;
+    if (first.at != null) props.initial_seen_at = first.at;
+    // Last touch under the bare `utm_*` / `gclid` / `fbclid` convention.
     for (const key of PARAM_KEYS) {
-      if (last[key] != null) props[`$${key}`] = last[key];
+      if (last[key] != null) props[key] = last[key];
     }
     return props;
   }

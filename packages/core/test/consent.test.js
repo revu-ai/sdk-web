@@ -267,7 +267,7 @@ describe("RevuClient > consent stamping + category API", () => {
   test("every captured event carries the current $consent state", () => {
     const { client, events } = makeClient();
     client.capture("evt_1");
-    expect(events[0].properties.$consent).toEqual({
+    expect(events[0].context.consent).toEqual({
       analytics: "granted",
       marketing: "granted",
       functional: "granted",
@@ -281,7 +281,7 @@ describe("RevuClient > consent stamping + category API", () => {
 
     client.capture("after_set");
     const e = events.find((ev) => ev.event_type === "after_set");
-    expect(e?.properties.$consent).toEqual({
+    expect(e?.context.consent).toEqual({
       analytics: "granted",
       marketing: "denied",
       functional: "granted",

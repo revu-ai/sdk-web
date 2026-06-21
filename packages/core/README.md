@@ -159,11 +159,12 @@ init, plus one event per interaction.
 | `$web_vital`                    | LCP, INP, and CLS (session-windowed per spec), emitted on page hide                             |
 | `$identify`, `$reset`, `$alias` | Identity transitions                                                                            |
 
-Every event also carries environment context (`$user_agent`,
-`$language`, `$timezone`, screen and viewport geometry, online state,
-connection type when available, initial referrer) and a `$sdk_version`
-stamp so the server can correlate behavior with the exact SDK build
-that produced it.
+Every event also carries an engine `context` bucket (`user_agent`,
+`language`, `timezone`, screen and viewport geometry, online state,
+connection type when available, initial referrer, consent state) and a
+`sdk_version` stamp so the server can correlate behavior with the exact
+SDK build that produced it. `context` is separate from your `capture()`
+`properties`, so the two never collide.
 
 ## Browser support
 
@@ -175,8 +176,8 @@ the URL constructor) that every browser in that floor supports.
 
 Optional APIs are read defensively. Network Information
 (`navigator.connection`) is absent on Safari and Firefox today; events
-captured on those engines simply omit `$connection_type` and
-`$connection_downlink_mbps` without affecting capture.
+captured on those engines simply omit `context.connection_type` and
+`context.connection_downlink_mbps` without affecting capture.
 
 ## Size
 
@@ -212,7 +213,7 @@ gzip as the fallback.
 
 The event shape on the wire (the contract with ingest) is versioned
 separately and evolves additively: new fields appear, existing ones
-do not change meaning. The `$sdk_version` on every event lets the
+do not change meaning. The `context.sdk_version` on every event lets the
 server correlate behavior with the exact build that emitted it.
 
 The public surface is exactly:

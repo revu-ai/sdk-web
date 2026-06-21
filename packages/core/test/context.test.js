@@ -22,31 +22,31 @@ afterEach(() => {
 describe("Context > session-scoped fields", () => {
   test("captures user agent and language on construction", () => {
     const ctx = new Context().build();
-    expect(typeof ctx.$user_agent).toBe("string");
-    expect(/** @type {string} */ (ctx.$user_agent).length).toBeGreaterThan(0);
-    expect(typeof ctx.$language).toBe("string");
+    expect(typeof ctx.user_agent).toBe("string");
+    expect(/** @type {string} */ (ctx.user_agent).length).toBeGreaterThan(0);
+    expect(typeof ctx.language).toBe("string");
   });
 
   test("captures screen geometry and pixel ratio", () => {
     const ctx = new Context().build();
-    expect(typeof ctx.$screen_width).toBe("number");
-    expect(typeof ctx.$screen_height).toBe("number");
-    expect(typeof ctx.$screen_pixel_ratio).toBe("number");
+    expect(typeof ctx.screen_width).toBe("number");
+    expect(typeof ctx.screen_height).toBe("number");
+    expect(typeof ctx.screen_pixel_ratio).toBe("number");
   });
 
   test("captures a timezone string via Intl", () => {
     const ctx = new Context().build();
-    expect(typeof ctx.$timezone).toBe("string");
-    expect(/** @type {string} */ (ctx.$timezone).length).toBeGreaterThan(0);
+    expect(typeof ctx.timezone).toBe("string");
+    expect(/** @type {string} */ (ctx.timezone).length).toBeGreaterThan(0);
   });
 
   test("session fields are stable across multiple build() calls", () => {
     const c = new Context();
     const first = c.build();
     const second = c.build();
-    expect(second.$user_agent).toBe(first.$user_agent);
-    expect(second.$language).toBe(first.$language);
-    expect(second.$screen_width).toBe(first.$screen_width);
+    expect(second.user_agent).toBe(first.user_agent);
+    expect(second.language).toBe(first.language);
+    expect(second.screen_width).toBe(first.screen_width);
   });
 });
 
@@ -63,31 +63,31 @@ describe("Context > URL query is not parsed on the SDK", () => {
       "/?utm_source=google&utm_medium=cpc&utm_campaign=summer&gclid=abc123&fbclid=xyz789",
     );
     const ctx = new Context().build();
-    expect(ctx.$utm_source).toBeUndefined();
-    expect(ctx.$utm_medium).toBeUndefined();
-    expect(ctx.$utm_campaign).toBeUndefined();
-    expect(ctx.$utm_term).toBeUndefined();
-    expect(ctx.$utm_content).toBeUndefined();
-    expect(ctx.$gclid).toBeUndefined();
-    expect(ctx.$fbclid).toBeUndefined();
+    expect(ctx.utm_source).toBeUndefined();
+    expect(ctx.utm_medium).toBeUndefined();
+    expect(ctx.utm_campaign).toBeUndefined();
+    expect(ctx.utm_term).toBeUndefined();
+    expect(ctx.utm_content).toBeUndefined();
+    expect(ctx.gclid).toBeUndefined();
+    expect(ctx.fbclid).toBeUndefined();
   });
 });
 
 describe("Context > environment", () => {
   test("stamps $environment when provided", () => {
     const ctx = new Context({ environment: "staging" }).build();
-    expect(ctx.$environment).toBe("staging");
+    expect(ctx.environment).toBe("staging");
   });
 
   test("omits $environment when no opt is provided", () => {
     const ctx = new Context().build();
-    expect(ctx.$environment).toBeUndefined();
+    expect(ctx.environment).toBeUndefined();
   });
 
   test("$environment is session-stable across build() calls", () => {
     const c = new Context({ environment: "development" });
-    expect(c.build().$environment).toBe("development");
-    expect(c.build().$environment).toBe("development");
+    expect(c.build().environment).toBe("development");
+    expect(c.build().environment).toBe("development");
   });
 });
 
@@ -97,11 +97,11 @@ describe("Context > referrer", () => {
     // we assert the negative case (absent referrer omits the field entirely).
     const ctx = new Context().build();
     if (document.referrer) {
-      expect(ctx.$initial_referrer).toBe(document.referrer);
-      expect(typeof ctx.$initial_referrer_host).toBe("string");
+      expect(ctx.initial_referrer).toBe(document.referrer);
+      expect(typeof ctx.initial_referrer_host).toBe("string");
     } else {
-      expect(ctx.$initial_referrer).toBeUndefined();
-      expect(ctx.$initial_referrer_host).toBeUndefined();
+      expect(ctx.initial_referrer).toBeUndefined();
+      expect(ctx.initial_referrer_host).toBeUndefined();
     }
   });
 });
@@ -109,13 +109,13 @@ describe("Context > referrer", () => {
 describe("Context > per-event volatile fields", () => {
   test("samples viewport size on every build() call", () => {
     const ctx = new Context().build();
-    expect(typeof ctx.$viewport_width).toBe("number");
-    expect(typeof ctx.$viewport_height).toBe("number");
+    expect(typeof ctx.viewport_width).toBe("number");
+    expect(typeof ctx.viewport_height).toBe("number");
   });
 
   test("samples online state", () => {
     const ctx = new Context().build();
-    expect(typeof ctx.$online).toBe("boolean");
+    expect(typeof ctx.online).toBe("boolean");
   });
 
   test("samples Network Information API fields when present", () => {
@@ -133,10 +133,10 @@ describe("Context > per-event volatile fields", () => {
     });
     try {
       const ctx = new Context().build();
-      expect(ctx.$connection_type).toBe("4g");
-      expect(ctx.$connection_downlink_mbps).toBe(9.5);
-      expect(ctx.$connection_rtt_ms).toBe(50);
-      expect(ctx.$save_data).toBe(false);
+      expect(ctx.connection_type).toBe("4g");
+      expect(ctx.connection_downlink_mbps).toBe(9.5);
+      expect(ctx.connection_rtt_ms).toBe(50);
+      expect(ctx.save_data).toBe(false);
     } finally {
       if (original) {
         Object.defineProperty(navigator, "connection", original);
@@ -155,8 +155,8 @@ describe("Context > per-event volatile fields", () => {
     Object.defineProperty(window, "innerWidth", { configurable: true, value: originalWidth + 1 });
     try {
       const second = c.build();
-      expect(second.$viewport_width).toBe(originalWidth + 1);
-      expect(second.$viewport_width).not.toBe(first.$viewport_width);
+      expect(second.viewport_width).toBe(originalWidth + 1);
+      expect(second.viewport_width).not.toBe(first.viewport_width);
     } finally {
       Object.defineProperty(window, "innerWidth", { configurable: true, value: originalWidth });
     }
@@ -166,7 +166,7 @@ describe("Context > per-event volatile fields", () => {
 describe("Context > merge order", () => {
   test("session and volatile keys coexist on the built payload", () => {
     const ctx = new Context().build();
-    expect(typeof ctx.$user_agent).toBe("string"); // session
-    expect(typeof ctx.$viewport_width).toBe("number"); // volatile
+    expect(typeof ctx.user_agent).toBe("string"); // session
+    expect(typeof ctx.viewport_width).toBe("number"); // volatile
   });
 });

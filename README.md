@@ -97,23 +97,23 @@ A plugin is `{ name: string, install(api): void }`. Inside `install`, the plugin
 
 Plugins live in different distribution units depending on size and lifecycle - the rubric is in [ARCHITECTURE.md](./ARCHITECTURE.md).
 
-## Environment context on every event
+## Context on every event
 
-Every event also carries engine-emitted properties (prefixed `$`) so the dashboard can break out by browser, viewport, locale, and campaign without any host-side wiring:
+Every event carries an engine-emitted `context` bucket (a top-level sibling of `properties`, with unprefixed keys) so the dashboard can break out by browser, viewport, locale, and campaign without any host-side wiring:
 
-| Field | Source | Stable per |
+| `context` field | Source | Stable per |
 |---|---|---|
-| `$sdk_version` | Build version of `@revu-ai/core` baked into this bundle | bundle |
-| `$user_agent` | `navigator.userAgent` (server parses os / browser / device) | page load |
-| `$language` | `navigator.language` | page load |
-| `$timezone` | `Intl.DateTimeFormat().resolvedOptions().timeZone` | page load |
-| `$screen_width`, `$screen_height`, `$screen_pixel_ratio` | `screen.*`, `devicePixelRatio` | page load |
-| `$viewport_width`, `$viewport_height` | `window.innerWidth/Height` | event |
-| `$online` | `navigator.onLine` | event |
-| `$connection_type`, `$connection_downlink_mbps`, `$connection_rtt_ms`, `$save_data` | Network Information API (Chromium only today) | event |
-| `$initial_referrer`, `$initial_referrer_host` | `document.referrer` at init | page load |
+| `sdk_version` | Build version of `@revu-ai/core` baked into this bundle | bundle |
+| `user_agent` | `navigator.userAgent` (server parses os / browser / device) | page load |
+| `language` | `navigator.language` | page load |
+| `timezone` | `Intl.DateTimeFormat().resolvedOptions().timeZone` | page load |
+| `screen_width`, `screen_height`, `screen_pixel_ratio` | `screen.*`, `devicePixelRatio` | page load |
+| `viewport_width`, `viewport_height` | `window.innerWidth/Height` | event |
+| `online` | `navigator.onLine` | event |
+| `connection_type`, `connection_downlink_mbps`, `connection_rtt_ms`, `save_data` | Network Information API (Chromium only today) | event |
+| `initial_referrer`, `initial_referrer_host` | `document.referrer` at init | page load |
 
-Caller-supplied properties on `revu.capture(name, props)` always win over engine values on collision, so the host can override anything when it knows better. UA parsing into os / browser / device happens server-side so the SDK stays tiny - and so do derivations like "first seen at" and "new vs returning", which the server computes deterministically from the event stream and so survive SDK upgrades and partial storage corruption.
+`context` (engine environment) and `properties` (your `capture(name, props)` payload) are separate buckets, so they never collide - no `$`-prefix needed and the host's own keys are never overwritten. UA parsing into os / browser / device happens server-side so the SDK stays tiny - and so do derivations like "first seen at" and "new vs returning", which the server computes deterministically from the event stream and so survive SDK upgrades and partial storage corruption.
 
 ## Custom events
 

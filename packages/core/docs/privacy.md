@@ -129,7 +129,7 @@ Only `analytics` gates capture: while it is denied, every interaction
 suppressed before an event is built, so nothing leaves the browser.
 `optOut()` / `optIn()` are aliases for denying / granting it.
 `marketing` and `functional` are declarative: the SDK does not act on
-them, it stamps the full state on every event (`properties.$consent`) so
+them, it stamps the full state on every event (`context.consent`) so
 the server honors the visitor's choices on the destinations downstream.
 
 The choice is persisted in the same first-party store as identity, so a
@@ -148,7 +148,7 @@ For per-element opt-out, use `data-revu-mask` on the subtree.
 
 Some browsers advertise a Global Privacy Control signal
 (`navigator.globalPrivacyControl`). The SDK always stamps it on events as
-`properties.$gpc` so the server sees it. With `honorGpc: true` (off by
+`context.gpc` so the server sees it. With `honorGpc: true` (off by
 default), a GPC signal also defaults the `analytics` category to denied,
 unless the visitor has already made an explicit choice through your
 banner - an explicit choice always wins. The default is off because

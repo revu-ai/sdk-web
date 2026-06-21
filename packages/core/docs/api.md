@@ -207,7 +207,7 @@ revu.consent.get();
 
 Only `analytics` gates capture: denying it suppresses every event,
 exactly like `optOut()`. `marketing` and `functional` are declarative -
-the SDK stamps the full state on every event as `properties.$consent` so
+the SDK stamps the full state on every event as `context.consent` so
 the server can honor the visitor's choices on downstream destinations,
 but it never acts on them itself.
 
@@ -263,7 +263,7 @@ See [plugins.md](./plugins.md) for the plugin contract.
 ## `revu.version`
 
 The build string of the bundle (for example `"0.1.0"`). The same string
-ships on every event as `properties.$sdk_version`, and it is useful for
+ships on every event as `context.sdk_version`, and it is useful for
 support tickets (paste it in) and console introspection.
 
 ```js

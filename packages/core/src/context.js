@@ -19,9 +19,11 @@
  *     wifi, online state toggles - so we sample at emission time rather
  *     than trying to observe every change.
  *
- * Field naming follows the existing `$pageview` / `$autocapture` convention:
- * every engine-emitted property is `$`-prefixed so custom capture() properties
- * remain in their own namespace and never collide.
+ * These fields are emitted UNPREFIXED into the event's top-level `context`
+ * bucket (a sibling of `properties`), so they never collide with caller
+ * `capture()` properties and downstream SQL / warehouse consumers get the
+ * de-facto context-vs-properties shape. The `$`-prefix convention is gone:
+ * environment lives in `context`, the event's own payload lives in `properties`.
  */
 
 import { readGpc, scrubUrl } from "./utils.js";
@@ -38,7 +40,7 @@ export class Context {
     /** @type {Record<string, unknown>} */
     this.session = this._buildSessionContext();
     if (opts.environment) {
-      this.session.$environment = opts.environment;
+      this.session.environment = opts.environment;
     }
   }
 
@@ -58,23 +60,23 @@ export class Context {
 
     if (typeof navigator !== "undefined") {
       if (typeof navigator.userAgent === "string") {
-        ctx.$user_agent = navigator.userAgent;
+        ctx.user_agent = navigator.userAgent;
       }
       if (typeof navigator.language === "string") {
-        ctx.$language = navigator.language;
+        ctx.language = navigator.language;
       }
     }
 
     if (typeof screen !== "undefined") {
-      if (typeof screen.width === "number") ctx.$screen_width = screen.width;
-      if (typeof screen.height === "number") ctx.$screen_height = screen.height;
+      if (typeof screen.width === "number") ctx.screen_width = screen.width;
+      if (typeof screen.height === "number") ctx.screen_height = screen.height;
     }
     if (typeof window !== "undefined" && typeof window.devicePixelRatio === "number") {
-      ctx.$screen_pixel_ratio = window.devicePixelRatio;
+      ctx.screen_pixel_ratio = window.devicePixelRatio;
     }
 
     try {
-      ctx.$timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+      ctx.timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
     } catch {
       // Very old browsers without Intl. Best-effort.
     }
@@ -83,9 +85,9 @@ export class Context {
       // Scrub credential / PII query values from the referrer while keeping
       // its path and host (the referrer of an auth redirect can carry a
       // token or email in its query).
-      ctx.$initial_referrer = scrubUrl(document.referrer);
+      ctx.initial_referrer = scrubUrl(document.referrer);
       try {
-        ctx.$initial_referrer_host = new URL(document.referrer).hostname;
+        ctx.initial_referrer_host = new URL(document.referrer).hostname;
       } catch {
         // Malformed referrer; skip the parsed host but keep the raw string.
       }
@@ -96,7 +98,7 @@ export class Context {
     // it for capture (see consent.js honorGpc). Session-stable: GPC does not
     // change inside a single page load.
     const gpc = readGpc();
-    if (typeof gpc === "boolean") ctx.$gpc = gpc;
+    if (typeof gpc === "boolean") ctx.gpc = gpc;
 
     return ctx;
   }
@@ -112,22 +114,22 @@ export class Context {
     const ctx = {};
 
     if (typeof window !== "undefined") {
-      if (typeof window.innerWidth === "number") ctx.$viewport_width = window.innerWidth;
-      if (typeof window.innerHeight === "number") ctx.$viewport_height = window.innerHeight;
+      if (typeof window.innerWidth === "number") ctx.viewport_width = window.innerWidth;
+      if (typeof window.innerHeight === "number") ctx.viewport_height = window.innerHeight;
     }
 
     if (typeof navigator !== "undefined") {
-      if (typeof navigator.onLine === "boolean") ctx.$online = navigator.onLine;
+      if (typeof navigator.onLine === "boolean") ctx.online = navigator.onLine;
       // Network Information API: present on Chromium and Edge today; absent
       // on Safari and Firefox. Read defensively.
       const conn = /** @type {any} */ (navigator).connection
         || /** @type {any} */ (navigator).mozConnection
         || /** @type {any} */ (navigator).webkitConnection;
       if (conn) {
-        if (typeof conn.effectiveType === "string") ctx.$connection_type = conn.effectiveType;
-        if (typeof conn.downlink === "number") ctx.$connection_downlink_mbps = conn.downlink;
-        if (typeof conn.rtt === "number") ctx.$connection_rtt_ms = conn.rtt;
-        if (typeof conn.saveData === "boolean") ctx.$save_data = conn.saveData;
+        if (typeof conn.effectiveType === "string") ctx.connection_type = conn.effectiveType;
+        if (typeof conn.downlink === "number") ctx.connection_downlink_mbps = conn.downlink;
+        if (typeof conn.rtt === "number") ctx.connection_rtt_ms = conn.rtt;
+        if (typeof conn.saveData === "boolean") ctx.save_data = conn.saveData;
       }
     }
 
@@ -137,9 +139,8 @@ export class Context {
   /**
    * Build the merged context for an event. Session values are stable
    * across the page load; volatile values are sampled fresh on each call.
-   * Caller-supplied properties (passed to capture() or attached by the
-   * capture layer) override engine values on collision so a host that
-   * knows better than the SDK can always do so.
+   * The result is placed in the event's top-level `context` bucket by
+   * `client.record()`, separate from caller `properties`.
    * @returns {Record<string, unknown>}
    */
   build() {
