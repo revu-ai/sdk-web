@@ -4,7 +4,7 @@
   "description": "REVU Web SDK - lean capture core (autocapture, identity, queue, transport). Vanilla JS + JSDoc.",
   "author": "Tarek Raafat",
   "license": "Apache-2.0",
-  "homepage": "https://github.com/revu-ai/sdk-web/tree/main/packages/core#readme",
+  "homepage": "https://developers.revu.ai/web/",
   "bugs": {
     "url": "https://github.com/revu-ai/sdk-web/issues"
   },
