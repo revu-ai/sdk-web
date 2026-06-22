@@ -317,9 +317,20 @@ export class RevuClient {
    *
    * Idempotent: calling identify() repeatedly with the same userId is a
    * no-op (no duplicate $identify events). Non-string or empty userIds
-   * are also no-ops. When identification transitions from one userId to
-   * another, the emitted event's `properties.previous_user_id` carries
-   * the prior value so the dashboard can render the change.
+   * are also no-ops.
+   *
+   * Two transitions are handled differently to keep identity clean on
+   * shared/family devices:
+   *
+   *   - anonymous -> identified (no prior userId): the current anonymous
+   *     device is bound to the user. The anonymous id is kept so the
+   *     pre-login activity in this session stitches to the now-known user.
+   *   - identified -> a DIFFERENT identified user: a different person is on
+   *     this client (a shared device, or a host that did not call reset()
+   *     on logout). Treated as an implicit logout + login: a `$reset` is
+   *     emitted for the old user, the device id is rotated, and the two
+   *     user ids are NOT stitched together - so two accounts can never be
+   *     merged into one person by reusing a device.
    *
    * @param {string} userId
    */
@@ -327,10 +338,15 @@ export class RevuClient {
     if (typeof userId !== "string" || userId.length === 0) return;
     if (this.identity.userId === userId) return;
     const previousUserId = this.identity.userId;
+    if (previousUserId !== null) {
+      // Switching from one known user to another: sever the prior person.
+      // Emit $reset BEFORE rotating so it carries the old session/user,
+      // then reset() rotates the anonymous + session ids.
+      this.record("$reset", { properties: { previous_user_id: previousUserId } });
+      this.identity.reset();
+    }
     this.identity.identify(userId);
-    this.record("$identify", {
-      properties: previousUserId ? { previous_user_id: previousUserId } : {},
-    });
+    this.record("$identify", { properties: {} });
   }
 
   /**
@@ -374,15 +390,16 @@ export class RevuClient {
   /**
    * Sign-out counterpart to {@link identify}: emit a synthetic `$reset`
    * event marking the close of the identified session, then clear the
-   * user id and regenerate the session id. The anonymous id is
-   * preserved - the same browser/device remains tracked as an
-   * anonymous visitor.
+   * user id and rotate BOTH the session id and the anonymous (device) id.
+   * Rotating the device id is the logout-hygiene guarantee: the next
+   * person on this browser (a shared/family device) starts a clean
+   * identity and is never linked into the prior person.
    *
    * Order matters: the `$reset` event is emitted BEFORE the identity
    * reset so the event carries the OLD `session_id` and `user_id` and
    * sorts as the final marker of the logged-in session in the dashboard
-   * timeline. Subsequent events use the fresh session id with
-   * `user_id: null`.
+   * timeline. Subsequent events use the fresh session id, a fresh
+   * anonymous id, and `user_id: null`.
    *
    * Idempotent: calling `reset()` when there is no identified user is
    * a no-op (no event, no identity change). That keeps a redundant

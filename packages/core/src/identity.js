@@ -4,15 +4,22 @@
  * Two device/person ids and one rolling session id:
  *
  *   - anonymousId  - the device id. A UUID generated on first visit and
- *                    persisted across reloads. Never tied to a known
- *                    person; survives logout.
- *   - userId       - the person id. With `autoIdentify` (the default), a
- *                    persistent UUID is auto-generated on first visit so
- *                    every event arrives attributed to a stable visitor.
- *                    Host apps replace it with their real auth id via
- *                    `revu.identify(...)`; the manual id wins and is also
- *                    persisted. `reset()` rotates the auto id (logout =
- *                    new visitor) or clears it when autoIdentify is off.
+ *                    persisted across reloads. Identifies a device before
+ *                    login. ROTATED on `reset()` (logout): the next person
+ *                    on a shared/family device must not inherit the prior
+ *                    person's identity, so the device thread is severed.
+ *                    A returning user re-unifies by their `userId` on the
+ *                    next `identify()`, so rotation does not fragment them.
+ *   - userId       - the person id. Null by default until the host app
+ *                    calls `revu.identify(...)` with the user's real auth
+ *                    id, so a non-null userId always denotes a real
+ *                    authenticated user. The manual id is persisted across
+ *                    reloads. `reset()` clears it (logout). With the
+ *                    optional `autoIdentify` a persistent UUID is
+ *                    auto-generated instead, and `reset()` rotates it; off
+ *                    by default because it makes anonymous visitors look
+ *                    identified and blocks the server's same-account
+ *                    safety check.
  *   - sessionId    - the session id. With session continuation enabled
  *                    (the default, sessionTimeoutMs > 0), the previous
  *                    session is reused when the gap since last activity
@@ -66,12 +73,12 @@ const SESSION_TOUCH_THROTTLE_MS = 5000;
 export class Identity {
   /**
    * @param {object} [options]
-   * @param {boolean} [options.autoIdentify=true] When true (the default),
-   *   a persistent user id is auto-generated on first visit so every
-   *   session carries a stable visitor identifier even before the host
-   *   app calls identify(). When false, userId remains null until the
-   *   host app calls identify() (or a prior identify is restored from
-   *   storage).
+   * @param {boolean} [options.autoIdentify=false] Off by default: userId
+   *   stays null until the host app calls identify() (or a prior identify
+   *   is restored from storage), so a non-null userId always denotes a
+   *   real authenticated user. When true, a persistent user id is
+   *   auto-generated on first visit instead; not recommended (it makes
+   *   anonymous visitors indistinguishable from identified ones).
    * @param {import("./storage.js").StorageMode} [options.persistentStorage="both"]
    *   Which client-side stores to use for persisting ids. "both" mirrors
    *   to localStorage and a first-party cookie for maximum durability;
@@ -92,7 +99,7 @@ export class Identity {
    */
   constructor(options = {}) {
     /** @type {boolean} */
-    this.autoIdentify = options.autoIdentify !== false;
+    this.autoIdentify = options.autoIdentify === true;
     /** @type {number} */
     this.sessionTimeoutMs = typeof options.sessionTimeoutMs === "number"
       ? options.sessionTimeoutMs
@@ -222,18 +229,23 @@ export class Identity {
   }
 
   /**
-   * Sign-out: close the current identified session.
+   * Sign-out: close the current identified session and sever the device
+   * thread so a different person on this browser starts clean.
    *
-   * The anonymous id is preserved (same browser remains a known device).
-   * The session id always rotates so subsequent events start a fresh
-   * session - logout is an explicit hard boundary that the continuation
-   * window does not survive. The user id behavior depends on autoIdentify:
+   * The anonymous (device) id ROTATES to a fresh value. This is the core
+   * of logout hygiene: a shared/family device must not link the next user
+   * into the previous user's person via a persistent anonymous id. The
+   * same returning user is still unified across logins by their userId,
+   * so rotating the device id does not fragment them.
    *
-   *   - autoIdentify true:  rotate to a fresh auto user id. The next
-   *     visitor on this browser is treated as a new person by analytics,
-   *     which matches typical "logged out" semantics for SaaS apps.
-   *   - autoIdentify false: clear to null until the host app calls
-   *     identify() again.
+   * The session id always rotates too - logout is an explicit hard
+   * boundary that the continuation window does not survive. The user id
+   * behavior depends on autoIdentify:
+   *
+   *   - autoIdentify false (default): clear to null until the host app
+   *     calls identify() again.
+   *   - autoIdentify true:  rotate to a fresh auto user id so the next
+   *     visitor on this browser is treated as a new person.
    */
   reset() {
     this._storage.remove(USER_KEY);
@@ -244,6 +256,10 @@ export class Identity {
     } else {
       this.userId = null;
     }
+    // Rotate the device id: the post-logout device is treated as new, so
+    // the next person does not inherit the prior person's identity graph.
+    this.anonymousId = uuid();
+    this._storage.write(ANON_KEY, this.anonymousId);
     this.sessionId = uuid();
     if (this.sessionTimeoutMs > 0) {
       const now = Date.now();

@@ -102,17 +102,29 @@ describe("RevuClient > identify", () => {
     expect(identifies).toHaveLength(1);
   });
 
-  test("transition between userIds emits a $identify with previous_user_id", () => {
+  test("switching to a DIFFERENT user is an implicit logout: $reset, rotated device id, no stitch", () => {
+    // A different known user on the same client (shared/family device, or a
+    // host that forgot reset() on logout) must not be merged into the prior
+    // person. identify() severs the device thread instead of stitching.
     const { client, events } = makeClient();
     client.identify("u_42");
+    const anonBefore = client.identity.anonymousId;
     client.identify("u_99");
+
+    // A $reset for the old user is emitted between the two identifies.
+    const reset = events.find((e) => e.event_type === "$reset");
+    expect(reset).toBeDefined();
+    expect(reset?.properties.previous_user_id).toBe("u_42");
 
     const identifies = events.filter((e) => e.event_type === "$identify");
     expect(identifies).toHaveLength(2);
     expect(identifies[0].user_id).toBe("u_42");
-    expect(identifies[0].properties.previous_user_id).toBeUndefined();
     expect(identifies[1].user_id).toBe("u_99");
-    expect(identifies[1].properties.previous_user_id).toBe("u_42");
+    // The two user ids are NOT stitched together (no previous_user_id).
+    expect(identifies[1].properties.previous_user_id).toBeUndefined();
+    // The device id rotated, so the server cannot link u_99 to u_42 via a
+    // shared anonymous_id.
+    expect(client.identity.anonymousId).not.toBe(anonBefore);
   });
 
   test("invalid input (empty string, non-string) is a no-op", () => {
@@ -219,7 +231,8 @@ describe("RevuClient > reset", () => {
 
     expect(client.identity.userId).toBeNull();
     expect(client.identity.sessionId).not.toBe(sessionBeforeReset);
-    expect(client.identity.anonymousId).toBe(anonymousBefore);
+    // Logout hygiene: the device id rotates so the next person starts clean.
+    expect(client.identity.anonymousId).not.toBe(anonymousBefore);
   });
 
   test("calling reset() twice does not emit a second $reset", () => {
@@ -243,19 +256,21 @@ describe("RevuClient > reset", () => {
     expect(after?.user_id).toBeNull();
   });
 
-  test("identify -> reset -> identify creates a fresh identified session", () => {
+  test("identify -> reset -> identify creates a fresh identified session on a new device id", () => {
     const { client, events } = makeClient();
     client.identify("u_42");
     const session1 = client.identity.sessionId;
+    const anon1 = client.identity.anonymousId;
     client.reset();
-    client.identify("u_42"); // same user, but it's a new login
+    client.identify("u_42"); // same user, but it's a new login after logout
     const session2 = client.identity.sessionId;
+    const anon2 = client.identity.anonymousId;
 
-    // Same anonymous visitor signs in, signs out, signs back in: we
-    // should see identify, $reset, identify - three identity-edge
-    // events all on the same anonymousId across two sessions.
-    expect(client.identity.anonymousId).toBeDefined();
+    // Signs in, signs out, signs back in: identify, $reset, identify across
+    // two sessions. The device id rotated on logout, so the second login is
+    // on a fresh anonymous id; the same user re-unifies server-side by u_42.
     expect(session2).not.toBe(session1);
+    expect(anon2).not.toBe(anon1);
 
     const identifyEvents = events.filter((e) => e.event_type === "$identify");
     expect(identifyEvents).toHaveLength(2);
