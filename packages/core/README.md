@@ -3,8 +3,8 @@
 [![npm](https://img.shields.io/npm/v/@revu-ai/core.svg)](https://www.npmjs.com/package/@revu-ai/core)
 [![ci](https://github.com/revu-ai/sdk-web/actions/workflows/ci.yml/badge.svg)](https://github.com/revu-ai/sdk-web/actions/workflows/ci.yml)
 [![license](https://img.shields.io/npm/l/@revu-ai/core.svg)](https://github.com/revu-ai/sdk-web/blob/main/LICENSE)
-[![size](https://img.shields.io/badge/min-32.41%20kB-blue)](#size)
-[![gzip](https://img.shields.io/badge/gzip-10.22%20kB-blue)](#size)
+[![size](https://img.shields.io/badge/min-33.71%20kB-blue)](#size)
+[![gzip](https://img.shields.io/badge/gzip-10.58%20kB-blue)](#size)
 
 The lean capture core of the REVU Web SDK. One line in your page
 captures pageviews, clicks, scroll depth, form submits, downloads,
@@ -25,7 +25,7 @@ revu.capture("checkout_completed", { plan: "pro" }); // optional explicit event
 revu.reset(); // on logout
 ```
 
-ESM only. **Zero runtime dependencies.** 32.41 kB minified, 10.22 kB gzipped.
+ESM only. **Zero runtime dependencies.** 33.71 kB minified, 10.58 kB gzipped.
 
 ## Documentation
 
@@ -61,7 +61,7 @@ Or load it directly from `cdn.revu.ai` (no build step required, see
 the [script tag quickstart](#plain-html-script-tag-no-bundler)):
 
 ```html
-<script async src="https://cdn.revu.ai/behavior/0.1.0"></script>
+<script async src="https://cdn.revu.ai/behavior/0.2.0"></script>
 <script>
   window.revu = window.revu || new Proxy({q:[]}, {
     get: (t, m) => m in t ? t[m] : (...a) => t.q.push([m, ...a]),
@@ -109,7 +109,7 @@ not change the bytes your page loads without warning (only the `src`
 changes):
 
 ```html
-<script async src="https://cdn.revu.ai/behavior/0.1.0"></script>
+<script async src="https://cdn.revu.ai/behavior/0.2.0"></script>
 <script>
   window.revu = window.revu || new Proxy({q:[]}, {
     get: (t, m) => m in t ? t[m] : (...a) => t.q.push([m, ...a]),
@@ -196,8 +196,8 @@ captured on those engines simply omit `context.connection_type` and
 
 | Metric          | Current | Budget |
 | --------------- | ------- | ------ |
-| Minified        | 32.41 kB | 34 kB  |
-| Gzipped on wire | 10.22 kB  | 12 kB  |
+| Minified        | 33.71 kB | 34 kB  |
+| Gzipped on wire | 10.58 kB  | 12 kB  |
 
 Both axes are CI gates (`bun run size`). Gzipped is the transfer cost
 users pay; minified is the parse and compile cost the browser pays on

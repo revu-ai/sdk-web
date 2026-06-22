@@ -4,7 +4,7 @@ All notable changes to `@revu-ai/core` are documented here.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.2.0] - 2026-06-22
 
 Clean, unified identity that does not over-merge on shared devices. A family, home, library, or kiosk computer (one OS login, several people using the same web app) previously risked collapsing into a single person; sequential users on one device are now tracked separately.
 
@@ -13,11 +13,17 @@ Clean, unified identity that does not over-merge on shared devices. A family, ho
 - **`autoIdentify` now defaults to `false`** (was `true`). Anonymous visitors are identified by `anonymous_id` alone and `user_id` stays `null` until you call `identify()`, so a non-null `user_id` always denotes a real authenticated account. This also makes the dashboard's "identified only" filter meaningful (previously every visitor had an auto id). Set `autoIdentify: true` to restore the old per-device auto id, though it is no longer recommended. Wire impact: pre-login events now ship `user_id: null` instead of an auto UUID.
 - **`reset()` now rotates the `anonymous_id`** (in addition to the session and user id). Logout severs the device thread so the next person on a shared device starts a clean identity. A returning user re-unifies by their `user_id` on the next `identify()`, so rotation does not fragment them.
 - **`identify()` treats a switch to a different known user as an implicit logout.** When a different account logs in, the SDK emits `$reset`, rotates the `anonymous_id`, and does not stitch the two user ids together, so two accounts never merge just because they shared a device, even if the host did not call `reset()` on logout. An anonymous-to-identified transition still binds the existing device to the user as before.
+- **Campaign attribution is now visitor-scoped and cleared on logout.** `reset()` (and the implicit logout above) now clears first-touch and last-touch attribution along with the `anonymous_id`, so the next person on a shared device does not inherit the previous person's acquisition campaign. The server still derives per-event campaign from the `$pageview` URL; only the persisted cross-session copy is rotated.
 
 ### Added
 
 - **Debug-mode integration hint.** In `debug: true`, the SDK logs a one-time console hint if events flow for a while without `identify()` ever being called, in case an app with logins forgot to wire it. Silent in production and silent once `identify()` is called; the message notes that intentionally anonymous-only sites can ignore it.
 - **Identity integration contract** documented in `docs/concepts.md` (call `identify()` on login, `reset()` on logout, `alias()` to join two accounts) with the shared-device guarantees spelled out per setup.
+- **Device-id management API.** `revu.getAnonymousId()` returns the current device id (parity with other SDKs' `getDeviceId()`); `revu.regenerateAnonymousId()` mints a fresh device id on demand, rotating only the device id and leaving the user, session, and consent intact (for an explicit device reset outside the logout flow).
+
+### Size
+
+- **Bundle size: 33.71 kB minified / 10.58 kB gzipped** (around 9 kB brotli on the wire), still under the 34 kB / 12 kB CI gate.
 
 ## [0.1.0] - 2026-06-21
 
@@ -67,4 +73,5 @@ First public release. Lean capture core for web behavioral analytics: one-line i
 - Consent is enforced before an event is built (a denied `analytics` category produces no event); Global Privacy Control is honored when `honorGpc` is set.
 - The transport sends only fields explicitly built by the client; no DOM serialization, no cookie reads other than the SDK's own first-party identity cookie.
 
+[0.2.0]: https://github.com/revu-ai/sdk-web/releases/tag/v0.2.0
 [0.1.0]: https://github.com/revu-ai/sdk-web/releases/tag/v0.1.0

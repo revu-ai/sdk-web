@@ -380,6 +380,9 @@ export class RevuClient {
       // then reset() rotates the anonymous + session ids.
       this.record("$reset", { properties: { previous_user_id: previousUserId } });
       this.identity.reset();
+      // Attribution is visitor-scoped: rotate it with the device id so the new
+      // person does not inherit the prior person's acquisition campaign.
+      this.attribution.clear();
     }
     this.identity.identify(userId);
     this.record("$identify", { properties: {} });
@@ -448,6 +451,30 @@ export class RevuClient {
       properties: { previous_user_id: previousUserId },
     });
     this.identity.reset();
+    // Attribution is visitor-scoped: clear it so the next person on this
+    // browser does not inherit the logged-out person's acquisition campaign.
+    this.attribution.clear();
+  }
+
+  /**
+   * The current anonymous (device) id. Useful for support, debugging, or
+   * correlating with server-side records (parity with other SDKs'
+   * `getDeviceId()`).
+   * @returns {string}
+   */
+  getAnonymousId() {
+    return this.identity.anonymousId;
+  }
+
+  /**
+   * Mint a fresh anonymous (device) id and return it. Rotates ONLY the device
+   * id (the user, session, and consent are left intact). Use for an explicit
+   * "reset device identity" control outside the normal logout flow; `reset()`
+   * already rotates the anonymous id on sign-out.
+   * @returns {string}
+   */
+  regenerateAnonymousId() {
+    return this.identity.regenerateAnonymousId();
   }
 
   /** Send any buffered events now. @returns {Promise<boolean>} */

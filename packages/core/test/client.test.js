@@ -279,6 +279,71 @@ describe("RevuClient > reset", () => {
   });
 });
 
+describe("RevuClient > device-id management", () => {
+  test("getAnonymousId returns the current device id", () => {
+    const { client } = makeClient();
+    expect(client.getAnonymousId()).toBe(client.identity.anonymousId);
+    expect(typeof client.getAnonymousId()).toBe("string");
+  });
+
+  test("regenerateAnonymousId rotates the device id, persists it, and returns it", () => {
+    const { client } = makeClient();
+    const before = client.getAnonymousId();
+    const returned = client.regenerateAnonymousId();
+    expect(returned).not.toBe(before);
+    expect(client.getAnonymousId()).toBe(returned);
+    expect(localStorage.getItem("revu_anonymous_id")).toBe(returned);
+  });
+
+  test("regenerateAnonymousId leaves the user id and session intact", () => {
+    const { client } = makeClient();
+    client.identify("u_keep");
+    const session = client.identity.sessionId;
+    client.regenerateAnonymousId();
+    expect(client.identity.userId).toBe("u_keep");
+    expect(client.identity.sessionId).toBe(session);
+  });
+
+  test("subsequent events carry the regenerated device id", () => {
+    const { client, events } = makeClient();
+    const fresh = client.regenerateAnonymousId();
+    client.capture("after_regen");
+    const evt = events.find((e) => e.event_type === "after_regen");
+    expect(evt?.anonymous_id).toBe(fresh);
+  });
+});
+
+describe("RevuClient > attribution is visitor-scoped (cleared on logout)", () => {
+  // A direct visit still records initial_landing_path / initial_seen_at as the
+  // acquisition origin, so that key is a reliable "attribution present" signal
+  // even without campaign params in the test environment.
+  test("reset() clears attribution so the next person does not inherit it", () => {
+    const { client, events } = makeClient();
+    client.identify("u_a");
+    client.capture("before_logout");
+    client.reset();
+    client.capture("after_logout");
+
+    const before = events.find((e) => e.event_type === "before_logout");
+    const after = events.find((e) => e.event_type === "after_logout");
+    expect(before?.context.initial_landing_path).toBeDefined();
+    expect(after?.context.initial_landing_path).toBeUndefined();
+  });
+
+  test("switching to a different user clears attribution for the new person", () => {
+    const { client, events } = makeClient();
+    client.identify("u_a");
+    client.capture("a_event");
+    client.identify("u_b"); // implicit logout + login
+    client.capture("b_event");
+
+    const aEvent = events.find((e) => e.event_type === "a_event");
+    const bEvent = events.find((e) => e.event_type === "b_event");
+    expect(aEvent?.context.initial_landing_path).toBeDefined();
+    expect(bEvent?.context.initial_landing_path).toBeUndefined();
+  });
+});
+
 describe("RevuClient > debug integration hint", () => {
   function makeDebugClient() {
     const client = new RevuClient({

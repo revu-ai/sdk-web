@@ -55,7 +55,9 @@
  * @property {(eventType: string, properties?: Record<string, unknown>) => void} capture  Capture a custom event. Empty / non-string names are ignored; properties are sanitized to a JSON-safe shape.
  * @property {(userId: string) => void} identify  Link the anonymous visitor to a known user id.
  * @property {(authoritativeId: string) => void} alias  Join the current identity to a separate authoritative id (cross-device stitching).
- * @property {() => void} reset                   Sign-out: clear the user, rotate the session, emit `$reset`.
+ * @property {() => void} reset                   Sign-out: clear the user, rotate the session and anonymous (device) id, clear attribution, emit `$reset`.
+ * @property {() => (string|null)} getAnonymousId        The current anonymous (device) id, or null before `init()`.
+ * @property {() => (string|null)} regenerateAnonymousId Mint and return a fresh anonymous (device) id (rotates only the device id), or null before `init()`.
  * @property {() => void} optOut                  Stop all capture for this visitor and persist the choice (alias for denying the `analytics` consent category).
  * @property {() => void} optIn                   Resume capture after a prior `optOut()` and persist the choice (alias for granting the `analytics` consent category).
  * @property {() => boolean} hasOptedOut          Whether capture is currently suppressed (the `analytics` category is denied).

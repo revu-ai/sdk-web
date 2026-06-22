@@ -6,4 +6,4 @@
  * "version" field and rerun the script (the prebuild hook does this
  * automatically on every build).
  */
-export const VERSION = "0.1.0";
+export const VERSION = "0.2.0";

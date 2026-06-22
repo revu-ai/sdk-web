@@ -115,11 +115,44 @@ const revu = {
 
   /**
    * Sign-out counterpart to {@link revu.identify}: clear the identified
-   * user, regenerate the session id, and emit a `$reset` event marking
-   * the end of the logged-in session. The anonymous id is preserved.
-   * No-op when no user is currently identified.
+   * user, rotate the session id AND the anonymous (device) id, clear
+   * campaign attribution, and emit a `$reset` event marking the end of the
+   * logged-in session. Rotating the device id keeps the next person on a
+   * shared device from inheriting this person's identity. No-op when no
+   * user is currently identified.
    */
   reset: safe(() => client?.reset(), onError),
+
+  /**
+   * The current anonymous (device) id, or null before `init()`. Parity with
+   * other SDKs' `getDeviceId()`; useful for support and debugging. Catches
+   * internally so it always returns a string or null, never throws.
+   * @returns {string|null}
+   */
+  getAnonymousId() {
+    try {
+      return client ? client.getAnonymousId() : null;
+    } catch (err) {
+      onError(err);
+      return null;
+    }
+  },
+
+  /**
+   * Mint and return a fresh anonymous (device) id (or null before `init()`).
+   * Rotates ONLY the device id, leaving the user, session, and consent
+   * intact; for an explicit "reset device" control outside logout (`reset()`
+   * already rotates it on sign-out). Catches internally; never throws.
+   * @returns {string|null}
+   */
+  regenerateAnonymousId() {
+    try {
+      return client ? client.regenerateAnonymousId() : null;
+    } catch (err) {
+      onError(err);
+      return null;
+    }
+  },
 
   /**
    * Stop all capture for this visitor and persist the choice across reloads.

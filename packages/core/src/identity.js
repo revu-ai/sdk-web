@@ -261,6 +261,8 @@ export class Identity {
     this.anonymousId = uuid();
     this._storage.write(ANON_KEY, this.anonymousId);
     this.sessionId = uuid();
+    // (anonymous id rotation extracted to regenerateAnonymousId for the
+    // public device-reset path; reset() inlines it above to keep one write.)
     if (this.sessionTimeoutMs > 0) {
       const now = Date.now();
       this._storage.write(SESSION_KEY, this.sessionId);
@@ -268,5 +270,19 @@ export class Identity {
       this._storage.write(SESSION_START_KEY, String(now));
       this._sessionLastTouchPersisted = now;
     }
+  }
+
+  /**
+   * Mint a fresh anonymous (device) id, persist it, and return it. Unlike
+   * {@link reset}, this rotates ONLY the device id - the user id, session,
+   * and consent are left untouched. For hosts that need a new device
+   * identity on demand (a privacy "reset device" control, a test harness)
+   * outside the normal sign-out flow.
+   * @returns {string} The new anonymous id.
+   */
+  regenerateAnonymousId() {
+    this.anonymousId = uuid();
+    this._storage.write(ANON_KEY, this.anonymousId);
+    return this.anonymousId;
   }
 }

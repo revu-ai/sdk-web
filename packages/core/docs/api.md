@@ -16,6 +16,7 @@ types. This page documents semantics, examples, and edge cases.
 - [`revu.identify(userId)`](#revuidentifyuserid)
 - [`revu.alias(authoritativeId)`](#revualiasauthoritativeid)
 - [`revu.reset()`](#revureset)
+- [`revu.getAnonymousId()` / `revu.regenerateAnonymousId()`](#revugetanonymousid--revuregenerateanonymousid)
 - [`revu.optOut()` / `revu.optIn()` / `revu.hasOptedOut()`](#revuoptout--revuoptin--revuhasoptedout)
 - [`revu.consent.set()` / `revu.consent.get()`](#revuconsentset--revuconsentget)
 - [`revu.flush()`](#revuflush)
@@ -147,8 +148,9 @@ same human, and dashboards stitch both journeys. The phone's local
 ## `revu.reset()`
 
 Sign-out counterpart to `identify`. Emits a `$reset` event marking the
-end of the identified session, then clears the user id and rotates BOTH
-the session id and the `anonymous_id` (device id).
+end of the identified session, then clears the user id, rotates BOTH the
+session id and the `anonymous_id` (device id), and clears campaign
+attribution (first and last touch).
 
 ```js
 function onLogout() {
@@ -160,7 +162,10 @@ Rotating the `anonymous_id` is the logout-hygiene guarantee: the next
 person on this browser (a shared, family, library, or kiosk device)
 starts a clean identity and is never linked into the previous person. A
 returning user re-unifies by their `user_id` on their next `identify()`,
-so rotating the device id does not fragment them.
+so rotating the device id does not fragment them. Campaign attribution is
+visitor-scoped and rotates with the device id for the same reason: the
+next person does not inherit the previous person's acquisition campaign
+(the server still derives per-event campaign from the `$pageview` URL).
 
 **Order matters.** The `$reset` event ships with the OLD `session_id`
 and `user_id`, so it sorts as the final marker of the logged-in session
@@ -177,6 +182,27 @@ on the timeline. Subsequent events use a fresh session id, a fresh
   avoid contamination: `identify()` already rotates the device id when a
   different user logs in (see above). `reset()` additionally gives a clean
   break the moment the user logs out, before the next person acts.
+
+## `revu.getAnonymousId()` / `revu.regenerateAnonymousId()`
+
+Read or rotate the anonymous (device) id directly.
+
+```js
+const deviceId = revu.getAnonymousId();   // e.g. for a support ticket
+revu.regenerateAnonymousId();             // mint a fresh device id on demand
+```
+
+- **`getAnonymousId()`** returns the current device id, or `null` before
+  `init()`. Parity with other SDKs' `getDeviceId()`; handy for support,
+  debugging, or correlating with server-side records.
+- **`regenerateAnonymousId()`** mints a fresh device id, persists it, and
+  returns it (or `null` before `init()`). It rotates **only** the device id
+  - the user id, session, and consent are left intact. Use it for an
+  explicit "reset device identity" control outside the normal logout flow;
+  `reset()` already rotates the device id on sign-out, so you do not need
+  this for logout.
+
+Both catch internally and never throw into the host page.
 
 ## `revu.optOut()` / `revu.optIn()` / `revu.hasOptedOut()`
 
@@ -281,7 +307,7 @@ See [plugins.md](./plugins.md) for the plugin contract.
 
 ## `revu.version`
 
-The build string of the bundle (for example `"0.1.0"`). The same string
+The build string of the bundle (for example `"0.2.0"`). The same string
 ships on every event as `context.sdk_version`, and it is useful for
 support tickets (paste it in) and console introspection.
 
@@ -311,8 +337,8 @@ client.capture("event_name", { foo: "bar" });
 ```
 
 `RevuClient`'s public methods are `start`, `capture`, `identify`,
-`alias`, `reset`, `optOut`, `optIn`, `hasOptedOut`, `setConsent`,
-`getConsent`, `flush`, and `use`.
+`alias`, `reset`, `getAnonymousId`, `regenerateAnonymousId`, `optOut`,
+`optIn`, `hasOptedOut`, `setConsent`, `getConsent`, `flush`, and `use`.
 The capture and identity methods
 mirror the singleton (the singleton calls `start()` for you inside
 `init()`); they are not wrapped with the `safe()` boundary, so a host

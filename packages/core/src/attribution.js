@@ -108,6 +108,22 @@ export class Attribution {
     return props;
   }
 
+  /**
+   * Drop the persisted first/last-touch records and stop stamping attribution
+   * on subsequent events. Called on logout (`reset()`): attribution is
+   * visitor-scoped, so it rotates with the `anonymous_id` and must not carry
+   * the previous person's acquisition campaign onto the next person who uses
+   * a shared device. A fresh visitor re-establishes attribution on their next
+   * campaign landing (or on the next full page load).
+   */
+  clear() {
+    if (this._storage) {
+      this._storage.remove(FIRST_KEY);
+      this._storage.remove(LAST_KEY);
+    }
+    this._props = {};
+  }
+
   /** @param {string} key @returns {Record<string, unknown>|null} */
   _read(key) {
     if (!this._storage) return null;

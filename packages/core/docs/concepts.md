@@ -182,7 +182,7 @@ shape:
     "viewport_width": 1440,
     "viewport_height": 900,
     "environment": "production",
-    "sdk_version": "0.1.0",
+    "sdk_version": "0.2.0",
     "consent": { "analytics": "granted", "marketing": "granted", "functional": "granted" }
   },
   "properties": {
@@ -316,9 +316,9 @@ envelope above; the rows below describe what's distinctive about each.
 
 | Event | Fires when | Notable properties |
 |---|---|---|
-| `$identify` | `identify(userId)` ties the anonymous visitor to a known user | `previous_user_id` (when an already-identified user changes) |
+| `$identify` | `identify(userId)` ties the current visitor to a known user | (none) |
 | `$alias` | `alias(authoritativeId)` merges the current ids under one authoritative id | `authoritative_id`, `current_user_id`, `current_anonymous_id` |
-| `$reset` | `reset()` ends the identified session (sign-out) | `previous_user_id` |
+| `$reset` | `reset()` on logout, or `identify()` switching to a different user; ends the identified session and rotates the device id | `previous_user_id` |
 
 **Quality**
 
