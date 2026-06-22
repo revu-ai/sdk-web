@@ -88,17 +88,27 @@ transport:
 
 ## `revu.identify(userId)`
 
-Replace the current `user_id` with your authoritative auth id (call on
-login or register).
+Bind the current visitor to your authoritative auth id. Call it on login
+or register, with the user's real account id.
 
 ```js
 revu.identify("u_4b9a2");
 ```
 
 Emits a synthetic `$identify` event so the dashboard can mark the exact
-moment the visitor became known. If a prior `user_id` existed, the event
-carries `properties.previous_user_id` so the transition is visible on
-the timeline.
+moment the visitor became known.
+
+There are two transitions, handled differently so identity stays clean on
+shared and family devices:
+
+- **Anonymous to identified** (no prior `user_id`): the current anonymous
+  device is bound to the user. The pre-login activity in this session
+  stitches to the now-known person.
+- **One user to a DIFFERENT user** (a different known account): treated as
+  an implicit logout + login. A `$reset` is emitted for the old user, the
+  `anonymous_id` is rotated, and the two ids are NOT stitched together, so
+  two accounts never collapse into one person just because they shared a
+  device. This holds even if the host forgot to call `reset()` on logout.
 
 **Edge cases.**
 
@@ -115,9 +125,9 @@ Join the current device's identity to a separate, authoritative identity
 for the same person, without changing the local `user_id`.
 
 The motivating flow is cross-device. A visitor signs up on desktop and
-gets a magic link by email. They open the link on their phone, which
-has its own auto-assigned `user_id`. After auth resolves on the phone,
-call:
+gets a magic link by email. They open the link on their phone, which has
+its own separate device identity (and possibly a different local
+`user_id`). After auth resolves on the phone, call:
 
 ```js
 revu.alias("u_4b9a2");
@@ -137,8 +147,8 @@ same human, and dashboards stitch both journeys. The phone's local
 ## `revu.reset()`
 
 Sign-out counterpart to `identify`. Emits a `$reset` event marking the
-end of the identified session, then clears the user id and rotates the
-session id. The anonymous device id is preserved.
+end of the identified session, then clears the user id and rotates BOTH
+the session id and the `anonymous_id` (device id).
 
 ```js
 function onLogout() {
@@ -146,18 +156,27 @@ function onLogout() {
 }
 ```
 
+Rotating the `anonymous_id` is the logout-hygiene guarantee: the next
+person on this browser (a shared, family, library, or kiosk device)
+starts a clean identity and is never linked into the previous person. A
+returning user re-unifies by their `user_id` on their next `identify()`,
+so rotating the device id does not fragment them.
+
 **Order matters.** The `$reset` event ships with the OLD `session_id`
 and `user_id`, so it sorts as the final marker of the logged-in session
-on the timeline. Subsequent events use a fresh session id with
-`user_id: null` (or a fresh auto id when `autoIdentify` is on).
+on the timeline. Subsequent events use a fresh session id, a fresh
+`anonymous_id`, and `user_id: null` (or a fresh auto id when
+`autoIdentify` is on).
 
 **Edge cases.**
 
 - No-op when there is no identified user. A redundant sign-out path
   (multiple components calling reset on logout) will not accidentally
-  rotate the session for an anonymous visitor.
-- The `anonymous_id` is never rotated by `reset()`. The browser remains
-  a known device.
+  rotate identity for an anonymous visitor.
+- Calling `reset()` on logout is recommended but not strictly required to
+  avoid contamination: `identify()` already rotates the device id when a
+  different user logs in (see above). `reset()` additionally gives a clean
+  break the moment the user logs out, before the next person acts.
 
 ## `revu.optOut()` / `revu.optIn()` / `revu.hasOptedOut()`
 

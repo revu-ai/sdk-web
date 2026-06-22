@@ -279,6 +279,75 @@ describe("RevuClient > reset", () => {
   });
 });
 
+describe("RevuClient > debug integration hint", () => {
+  function makeDebugClient() {
+    const client = new RevuClient({
+      apiKey: "revu_pk_test_1234567890",
+      host: "https://api.test",
+      autocapture: false,
+      autoIdentify: false,
+      flushAt: 10_000,
+      flushIntervalMs: 60_000,
+      maxBatch: 50,
+      maxQueue: 1000,
+      debug: true,
+      onEvent: () => {},
+    });
+    return client;
+  }
+
+  /**
+   * Run fn with console.warn captured, then restore it.
+   * @param {(warnings: string[]) => void} fn
+   */
+  function withWarnSpy(fn) {
+    const original = console.warn;
+    /** @type {string[]} */
+    const warnings = [];
+    console.warn = (...args) => warnings.push(args.join(" "));
+    try {
+      fn(warnings);
+    } finally {
+      console.warn = original;
+    }
+  }
+
+  const HINT = "identify() has not been called";
+
+  test("warns once after several events when identify() is never called", () => {
+    withWarnSpy((warnings) => {
+      const client = makeDebugClient();
+      for (let i = 0; i < 8; i++) client.capture(`evt_${i}`);
+      expect(warnings.filter((w) => w.includes(HINT))).toHaveLength(1);
+    });
+  });
+
+  test("never warns once identify() has been called", () => {
+    withWarnSpy((warnings) => {
+      const client = makeDebugClient();
+      client.identify("u_42");
+      for (let i = 0; i < 8; i++) client.capture(`evt_${i}`);
+      expect(warnings.filter((w) => w.includes(HINT))).toHaveLength(0);
+    });
+  });
+
+  test("does not warn in non-debug mode (production stays silent)", () => {
+    withWarnSpy((warnings) => {
+      const { client } = makeClient(); // debug: false
+      for (let i = 0; i < 8; i++) client.capture(`evt_${i}`);
+      expect(warnings.filter((w) => w.includes(HINT))).toHaveLength(0);
+    });
+  });
+
+  test("identity events ($alias) do not count toward the hint", () => {
+    withWarnSpy((warnings) => {
+      const client = makeDebugClient();
+      for (let i = 0; i < 8; i++) client.alias(`auth_${i}`);
+      expect(warnings.filter((w) => w.includes(HINT))).toHaveLength(0);
+    });
+  });
+});
+
 describe("RevuClient > engine context", () => {
   test("every event carries the engine-emitted context bucket", () => {
     const { client, events } = makeClient();

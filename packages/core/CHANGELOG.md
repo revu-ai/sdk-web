@@ -4,6 +4,21 @@ All notable changes to `@revu-ai/core` are documented here.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+Clean, unified identity that does not over-merge on shared devices. A family, home, library, or kiosk computer (one OS login, several people using the same web app) previously risked collapsing into a single person; sequential users on one device are now tracked separately.
+
+### Changed
+
+- **`autoIdentify` now defaults to `false`** (was `true`). Anonymous visitors are identified by `anonymous_id` alone and `user_id` stays `null` until you call `identify()`, so a non-null `user_id` always denotes a real authenticated account. This also makes the dashboard's "identified only" filter meaningful (previously every visitor had an auto id). Set `autoIdentify: true` to restore the old per-device auto id, though it is no longer recommended. Wire impact: pre-login events now ship `user_id: null` instead of an auto UUID.
+- **`reset()` now rotates the `anonymous_id`** (in addition to the session and user id). Logout severs the device thread so the next person on a shared device starts a clean identity. A returning user re-unifies by their `user_id` on the next `identify()`, so rotation does not fragment them.
+- **`identify()` treats a switch to a different known user as an implicit logout.** When a different account logs in, the SDK emits `$reset`, rotates the `anonymous_id`, and does not stitch the two user ids together, so two accounts never merge just because they shared a device, even if the host did not call `reset()` on logout. An anonymous-to-identified transition still binds the existing device to the user as before.
+
+### Added
+
+- **Debug-mode integration hint.** In `debug: true`, the SDK logs a one-time console hint if events flow for a while without `identify()` ever being called, in case an app with logins forgot to wire it. Silent in production and silent once `identify()` is called; the message notes that intentionally anonymous-only sites can ignore it.
+- **Identity integration contract** documented in `docs/concepts.md` (call `identify()` on login, `reset()` on logout, `alias()` to join two accounts) with the shared-device guarantees spelled out per setup.
+
 ## [0.1.0] - 2026-06-21
 
 First public release. Lean capture core for web behavioral analytics: one-line install, autocapture out of the box, category consent with GPC, client-side campaign attribution, a durable offline queue, persistent first-party identity, and zero runtime dependencies.

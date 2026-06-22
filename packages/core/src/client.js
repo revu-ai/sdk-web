@@ -94,6 +94,12 @@ export class RevuClient {
     this._installed = new Set();
     /** @type {boolean} True after `start()` so late `use()` calls install immediately. */
     this._started = false;
+    /** @type {boolean} Whether identify() has ever been called (debug hint only). */
+    this._identifyEverCalled = false;
+    /** @type {number} Non-identity events seen before any identify (debug hint only). */
+    this._preIdentifyEventCount = 0;
+    /** @type {boolean} Whether the "no identify()" debug hint has been shown. */
+    this._identifyHintShown = false;
   }
 
   /** Start transport + attention + autocapture + vitals + any registered plugins. */
@@ -254,6 +260,33 @@ export class RevuClient {
     // continuation window picks the same session_id back up. The identity
     // layer throttles persistence so this is cheap on chatty pages.
     this.identity.touchSession();
+    this._maybeHintMissingIdentify(eventType);
+  }
+
+  /**
+   * Debug-only integration hint. If real events keep flowing but the host
+   * has never called identify(), it may have forgotten to wire identity on
+   * login - in which case logged-in people are not tracked as individuals
+   * (and, on shared devices, cannot be kept apart). Shown once, in debug
+   * mode only, and never in production. Purely anonymous analytics is a
+   * valid setup, so the message says so and the hint stays silent once
+   * identify() is called.
+   * @param {string} eventType
+   */
+  _maybeHintMissingIdentify(eventType) {
+    if (!this.config.debug || this._identifyEverCalled || this._identifyHintShown) return;
+    // Identity / lifecycle events do not count - they are not "content"
+    // events that imply a missing login wiring.
+    if (SAMPLING_EXEMPT.has(eventType)) return;
+    if (++this._preIdentifyEventCount < 5) return;
+    this._identifyHintShown = true;
+    console.warn(
+      "[REVU] capturing events but identify() has not been called. If this " +
+        "app has user logins, call revu.identify(userId) on login so " +
+        "logged-in people are tracked as individuals and kept separate on " +
+        "shared devices. Ignore this if your site is intentionally " +
+        "anonymous-only.",
+    );
   }
 
   /**
@@ -336,6 +369,9 @@ export class RevuClient {
    */
   identify(userId) {
     if (typeof userId !== "string" || userId.length === 0) return;
+    // The host is wiring identify() - silences the debug integration hint
+    // even when this particular call is a same-id no-op below.
+    this._identifyEverCalled = true;
     if (this.identity.userId === userId) return;
     const previousUserId = this.identity.userId;
     if (previousUserId !== null) {

@@ -18,14 +18,17 @@ will run into: identity, sessions, the canonical event shape, and the
 Two ids, two layers:
 
 - **`anonymous_id`** is the **device** id. A UUID generated on first
-  visit and persisted across reloads. It never changes by user action.
-  Logging out does not rotate it; `reset()` preserves it on purpose.
-- **`user_id`** is the **person** id. With `autoIdentify` (the default),
-  a UUID is auto-generated on first visit so every event arrives
-  attributed to a stable visitor before login. `identify()` replaces
-  it with your real auth id and persists. `reset()` rotates the auto id
-  (logout becomes a new anonymous person from analytics' perspective)
-  or clears it to `null` when `autoIdentify` is off.
+  visit and persisted across reloads. It **rotates on `reset()`**
+  (logout) and when a different user logs in, so a shared or family
+  device does not thread one device id through multiple people. A
+  returning user re-unifies by their `user_id`, so rotation does not
+  fragment them.
+- **`user_id`** is the **person** id. Null by default until you call
+  `identify()` with the user's real auth id (so a non-null `user_id`
+  always denotes a real authenticated account). `reset()` clears it.
+  With the optional `autoIdentify` a per-device UUID is auto-generated
+  before login instead, and `reset()` rotates that auto id; off by
+  default because it makes anonymous visitors look identified.
 
 Both ids are mirrored to localStorage and a first-party cookie by
 default. If one store is evicted (Safari ITP can wipe localStorage
@@ -36,6 +39,38 @@ never crashes the host.
 
 Cross-device identity (the same person on two browsers) is joined via
 [`revu.alias()`](./api.md#revualiasauthoritativeid).
+
+### Identity integration contract
+
+Clean, unified identity depends on three calls from your app. The SDK
+cannot detect login or logout on its own; it reacts to these:
+
+| When | Call | Why |
+| ---- | ---- | --- |
+| On login / register | `revu.identify(userAccountId)` | Binds the device to the real account so this person is tracked as an individual and re-unified across their devices and sessions. |
+| On logout | `revu.reset()` | Severs the device thread (rotates the `anonymous_id`) so the next person on a shared device starts clean. |
+| Joining two known accounts for one human | `revu.alias(authoritativeId)` | The only call that merges two distinct real `user_id`s. Without it, two accounts stay separate. |
+
+What this buys you, by setup:
+
+- **Shared / family / library / kiosk devices.** As long as each person
+  calls `identify()` when they log in, they are tracked as separate
+  people. Switching to a different account is detected at `identify()`
+  time and rotates the device id, so identities never mix, even if the
+  app forgets to call `reset()` on logout. (Calling `reset()` is still
+  recommended: it gives a clean break the moment a user logs out, before
+  the next person browses anonymously.)
+- **Same person, multiple accounts on one device.** Logging into a second
+  account is tracked as a separate person by default. Call `alias()` only
+  if you actually want the two accounts unified.
+- **Intentionally anonymous-only sites.** If you never call `identify()`,
+  every visitor is anonymous (identified by `anonymous_id`). This is a
+  valid setup; there is nothing to wire.
+
+In `debug: true` mode, the SDK logs a one-time hint to the console if
+events flow for a while without `identify()` ever being called, in case
+your app has logins that were not wired up. It is silent in production
+and never fires once `identify()` is called.
 
 ## Sessions: engagement, not page visits
 
