@@ -4,6 +4,18 @@ All notable changes to `@revu-ai/core` are documented here.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] - 2026-09-05
+
+Capture the browser automation signal so the server can separate headless and synthetic traffic from real visits, even when the automated client wears a normal browser user agent.
+
+### Added
+
+- **`context.webdriver`.** `navigator.webdriver` is stamped on every event when the browser reports automation (Selenium, Playwright, Puppeteer, headless Chrome, and most synthetic monitors), and omitted otherwise so a genuine visit adds no bytes. It rides the session-scoped context like `context.gpc`, so it lands on the first `$pageview` and every subsequent event, which lets the server classify automated traffic that carries a human-looking user agent (a headless browser on a normal UA string, which server-side user-agent parsing cannot catch on its own). Absence means "not automated", consistent with the server treating an unclassified visit as human.
+
+### Size
+
+- **Bundle size: 33.78 kB minified / 10.4 kB gzipped** (around 9 kB brotli on the wire), still under the 34 kB / 12 kB CI gate.
+
 ## [0.2.0] - 2026-06-22
 
 Clean, unified identity that does not over-merge on shared devices. A family, home, library, or kiosk computer (one OS login, several people using the same web app) previously risked collapsing into a single person; sequential users on one device are now tracked separately.
@@ -73,5 +85,6 @@ First public release. Lean capture core for web behavioral analytics: one-line i
 - Consent is enforced before an event is built (a denied `analytics` category produces no event); Global Privacy Control is honored when `honorGpc` is set.
 - The transport sends only fields explicitly built by the client; no DOM serialization, no cookie reads other than the SDK's own first-party identity cookie.
 
+[0.3.0]: https://github.com/revu-ai/sdk-web/releases/tag/v0.3.0
 [0.2.0]: https://github.com/revu-ai/sdk-web/releases/tag/v0.2.0
 [0.1.0]: https://github.com/revu-ai/sdk-web/releases/tag/v0.1.0
