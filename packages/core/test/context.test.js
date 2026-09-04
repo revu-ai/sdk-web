@@ -50,6 +50,26 @@ describe("Context > session-scoped fields", () => {
   });
 });
 
+describe("Context > automation signal (navigator.webdriver)", () => {
+  const original = Object.getOwnPropertyDescriptor(navigator, "webdriver");
+  afterEach(() => {
+    if (original) Object.defineProperty(navigator, "webdriver", original);
+    else { try { delete /** @type {any} */ (navigator).webdriver; } catch {} }
+  });
+
+  test("stamps webdriver:true when the browser reports automation", () => {
+    Object.defineProperty(navigator, "webdriver", { value: true, configurable: true });
+    const ctx = new Context().build();
+    expect(ctx.webdriver).toBe(true);
+  });
+
+  test("omits webdriver for a real browser, so no bytes are added", () => {
+    Object.defineProperty(navigator, "webdriver", { value: false, configurable: true });
+    const ctx = new Context().build();
+    expect("webdriver" in ctx).toBe(false);
+  });
+});
+
 describe("Context > URL query is not parsed on the SDK", () => {
   // UTM and click-id derivation lives on the server, which parses them
   // from `$pageview.properties.url` and writes the result to the visitor

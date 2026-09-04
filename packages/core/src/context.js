@@ -100,6 +100,19 @@ export class Context {
     const gpc = readGpc();
     if (typeof gpc === "boolean") ctx.gpc = gpc;
 
+    // navigator.webdriver: the standardized automation flag. It is true under
+    // Selenium / Playwright / Puppeteer / headless Chrome and most synthetic
+    // monitors, and false or absent for a real browser. Stamped ONLY when true,
+    // so a genuine visit adds zero bytes (size budget) and the field's presence
+    // alone is the signal. It lets the server classify automated traffic that
+    // carries a human-looking user agent (a headless Chrome on a normal UA
+    // string, which server-side UA parsing cannot catch on its own). Session-
+    // stable, so it rides every event including the first $pageview, which is
+    // what lets the server pin the visitor's type correctly on first sight.
+    if (typeof navigator !== "undefined" && navigator.webdriver === true) {
+      ctx.webdriver = true;
+    }
+
     return ctx;
   }
 
