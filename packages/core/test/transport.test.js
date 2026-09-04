@@ -53,6 +53,23 @@ function tick() {
   return new Promise((resolve) => setTimeout(resolve, 0));
 }
 
+/**
+ * Poll until `predicate()` is truthy, yielding a macrotask between checks, up
+ * to `tries` times; returns the final result. Use this instead of a single
+ * `tick()` whenever an assertion depends on an async flush having COMPLETED (a
+ * beacon sent, a fetch started): one macrotask is enough on a fast, idle
+ * machine but can race under CI load, so we wait for the observable condition
+ * rather than a fixed number of ticks. It never makes a passing case fail (the
+ * predicate holds on the first tick locally); it only removes the flake.
+ */
+async function waitUntil(predicate, tries = 50) {
+  for (let i = 0; i < tries; i++) {
+    if (predicate()) return true;
+    await tick();
+  }
+  return predicate();
+}
+
 /** Mock `globalThis.fetch` with the given handler, returning the mock. */
 function mockFetch(/** @type {() => Promise<Response>} */ handler) {
   const fn = mock(handler);
@@ -346,7 +363,7 @@ describe("Transport", () => {
     t.enqueue(makeEvent(1));
 
     window.dispatchEvent(new Event("pagehide"));
-    await tick();
+    await waitUntil(() => sendBeacon.mock.calls.length >= 1);
 
     // pagehide path must take the beacon, NOT fetch: keepalive fetch under
     // unload is unreliable across browsers, which is why we wired beacon.
@@ -374,7 +391,7 @@ describe("Transport", () => {
     // localStorage forever (until the user opens the page again).
     Object.defineProperty(document, "visibilityState", { value: "hidden", configurable: true });
     document.dispatchEvent(new Event("visibilitychange"));
-    await tick();
+    await waitUntil(() => sendBeacon.mock.calls.length >= 1);
 
     expect(sendBeacon).toHaveBeenCalledTimes(1);
     expect(fetchMock).not.toHaveBeenCalled();
@@ -411,7 +428,7 @@ describe("Transport", () => {
 
     // Trigger a normal flush; do not await so the fetch stays pending.
     const flushing = t.flush();
-    await tick();
+    await waitUntil(() => t.sending && fetchMock.mock.calls.length >= 1);
     expect(t.sending).toBe(true);
     expect(fetchMock).toHaveBeenCalledTimes(1);
 
