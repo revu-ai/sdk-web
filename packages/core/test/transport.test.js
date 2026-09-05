@@ -55,12 +55,12 @@ function tick() {
 
 /**
  * Poll until `predicate()` is truthy, yielding a macrotask between checks, up
- * to `tries` times; returns the final result. Use this instead of a single
+ * to `tries` times; returns the final result. Use it instead of a single
  * `tick()` whenever an assertion depends on an async flush having COMPLETED (a
- * beacon sent, a fetch started): one macrotask is enough on a fast, idle
- * machine but can race under CI load, so we wait for the observable condition
- * rather than a fixed number of ticks. It never makes a passing case fail (the
- * predicate holds on the first tick locally); it only removes the flake.
+ * beacon sent, a fetch started), so a slow CI tick does not race the check. It
+ * never makes a passing case fail (the predicate holds on the first tick
+ * locally). Note: this does NOT address cross-test listener leakage; that is
+ * what `isolateTerminalListeners()` below is for.
  */
 async function waitUntil(predicate, tries = 50) {
   for (let i = 0; i < tries; i++) {
@@ -77,12 +77,75 @@ function mockFetch(/** @type {() => Promise<Response>} */ handler) {
   return fn;
 }
 
+/**
+ * Isolate a terminal-flush test from listeners leaked by OTHER tests.
+ *
+ * `installPageHideFlush()` registers `pagehide` (on the global) and
+ * `visibilitychange` (on `document`) with NO teardown - the SDK exposes no
+ * unlisten API by design - so every test in this file and in others
+ * (`capture.test.js`, the IIFE smoke clients, ...) that wires it leaves its
+ * listener on the SHARED happy-dom window/document for the rest of the run.
+ * Dispatching a terminal event then flushes every one of those stale
+ * transports too, so a mocked `sendBeacon` / `fetch` is invoked once PER leaked
+ * transport. That count is purely a function of how many files ran first: 1
+ * locally, 9 under CI's file order - the exact `Received 9` / `Received 8`
+ * failure this guards against.
+ *
+ * Point `addEventListener` / `dispatchEvent` (global, `window`, and `document`)
+ * at fresh `EventTarget`s so only THIS test's transport is wired and only it
+ * fires on dispatch. `document.visibilityState` is left untouched so the
+ * visibilitychange guard still reads the value the test sets. Call the returned
+ * function (the shared `afterEach` does, even on throw) to restore the globals.
+ * @returns {() => void} restore
+ */
+function isolateTerminalListeners() {
+  const win = new globalThis.EventTarget();
+  const doc = new globalThis.EventTarget();
+  const saved = {
+    gAdd: globalThis.addEventListener,
+    gDispatch: globalThis.dispatchEvent,
+    wAdd: window.addEventListener,
+    wDispatch: window.dispatchEvent,
+    dAdd: document.addEventListener,
+    dDispatch: document.dispatchEvent,
+  };
+  globalThis.addEventListener = win.addEventListener.bind(win);
+  globalThis.dispatchEvent = win.dispatchEvent.bind(win);
+  window.addEventListener = win.addEventListener.bind(win);
+  window.dispatchEvent = win.dispatchEvent.bind(win);
+  document.addEventListener = doc.addEventListener.bind(doc);
+  document.dispatchEvent = doc.dispatchEvent.bind(doc);
+  return () => {
+    globalThis.addEventListener = saved.gAdd;
+    globalThis.dispatchEvent = saved.gDispatch;
+    window.addEventListener = saved.wAdd;
+    window.dispatchEvent = saved.wDispatch;
+    document.addEventListener = saved.dAdd;
+    document.dispatchEvent = saved.dDispatch;
+  };
+}
+
+/**
+ * Set by a terminal-flush test to its `isolateTerminalListeners()` restorer;
+ * the shared `afterEach` calls it so the globals are restored even if the test
+ * throws mid-way.
+ * @type {(() => void) | null}
+ */
+let restoreListeners = null;
+
 beforeEach(() => {
   // Clear durable queue so each test starts empty.
   localStorage.clear();
 });
 
 afterEach(() => {
+  // Restore any terminal-listener isolation FIRST (before touching globals), so
+  // a throwing terminal-flush test cannot leak the swapped addEventListener /
+  // dispatchEvent into the next test.
+  if (restoreListeners) {
+    restoreListeners();
+    restoreListeners = null;
+  }
   // Restore the hermetic no-op (NOT a captured original), so a leaked listener
   // in a later file can never reach the real happy-dom fetch. See test/setup.js.
   globalThis.fetch = /** @type {typeof fetch} */ (/** @type {unknown} */ (noopFetch));
@@ -344,6 +407,8 @@ describe("Transport", () => {
   });
 
   test("installPageHideFlush() wires a 'pagehide' listener that flushes via sendBeacon", async () => {
+    // Only THIS transport's listener may fire, not the ones other tests leaked.
+    restoreListeners = isolateTerminalListeners();
     const sendBeacon = mock(() => true);
     /** @type {any} */ (navigator).sendBeacon = sendBeacon;
     const fetchMock = mockFetch(() =>
@@ -374,6 +439,8 @@ describe("Transport", () => {
   });
 
   test("installPageHideFlush() also flushes on 'visibilitychange -> hidden' (iOS Safari)", async () => {
+    // Only THIS transport's listener may fire, not the ones other tests leaked.
+    restoreListeners = isolateTerminalListeners();
     const sendBeacon = mock(() => true);
     /** @type {any} */ (navigator).sendBeacon = sendBeacon;
     const fetchMock = mockFetch(() =>
@@ -400,6 +467,10 @@ describe("Transport", () => {
   });
 
   test("terminal signal yields when a normal fetch is mid-flight (no queue corruption)", async () => {
+    // Only THIS transport's listeners may fire: a leaked listener from a stale
+    // (not-sending) transport would take the beacon path and make the
+    // "sendBeacon not called" assertion below fail (Received 8 under CI).
+    restoreListeners = isolateTerminalListeners();
     // Race we are guarding against: a normal `flush(false)` is mid-fetch
     // when the terminal signal fires. Without the `!this.sending` gate,
     // `flush(true)` would peek the SAME batch the fetch is sending,
@@ -445,6 +516,43 @@ describe("Transport", () => {
     await flushing;
     expect(t.queue.size()).toBe(0);
     clearInterval(t.timer ?? undefined);
+  });
+
+  test("terminal flush is confined to the current transport despite leaked listeners (regression: CI 9x amplification)", async () => {
+    const sendBeacon = mock(() => true);
+    /** @type {any} */ (navigator).sendBeacon = sendBeacon;
+    mockFetch(() => Promise.resolve(new Response("", { status: 200 })));
+
+    // Stand in for the pagehide listeners other tests/files leak onto the shared
+    // window with no teardown (installPageHideFlush has no unlisten). Registered
+    // on the REAL window BEFORE isolation, each would call sendBeacon if it fired
+    // - the mechanism behind the "Received 9" CI failure. We keep references so
+    // we can remove them, since the SDK cannot.
+    const leaked = Array.from({ length: 8 }, () =>
+      mock(() => /** @type {any} */ (navigator).sendBeacon("https://leak.invalid")),
+    );
+    for (const l of leaked) window.addEventListener("pagehide", l);
+
+    restoreListeners = isolateTerminalListeners();
+    const { t } = makeTransport();
+    t.start();
+    t.installPageHideFlush();
+    t.enqueue(makeEvent(1));
+
+    window.dispatchEvent(new Event("pagehide"));
+    await waitUntil(() => sendBeacon.mock.calls.length >= 1);
+
+    // Exactly one call - this transport - not one per leaked listener.
+    expect(sendBeacon).toHaveBeenCalledTimes(1);
+    for (const l of leaked) expect(l).not.toHaveBeenCalled();
+
+    clearInterval(t.timer ?? undefined);
+    // Restore globals now, then remove the real-window listeners (removeEventListener
+    // is not swapped by the isolation, so this reaches the real window) so nothing
+    // leaks into later tests.
+    restoreListeners();
+    restoreListeners = null;
+    for (const l of leaked) window.removeEventListener("pagehide", l);
   });
 
   describe("unserializable event quarantine", () => {
