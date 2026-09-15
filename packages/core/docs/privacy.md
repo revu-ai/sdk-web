@@ -100,6 +100,11 @@ By design, several categories of work live server-side:
 - **IP-based geo.** The SDK never reads or sends client geolocation.
   The server enriches based on the request's IP, which is also more
   durable than client APIs and never requires a permission prompt.
+  REVU derives country, city and network from the IP when an event
+  arrives, using local databases, so the IP is not sent to any outside
+  service. The IP itself is kept for 30 days, for crawler verification
+  and troubleshooting, then cleared. The events and the derived fields
+  stay.
 
 This is a hard boundary, not a temporary state. Anything that would
 require shipping a dictionary, an algorithm, or a model to the browser
