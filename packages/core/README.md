@@ -3,8 +3,8 @@
 [![npm](https://img.shields.io/npm/v/@revu-ai/core.svg)](https://www.npmjs.com/package/@revu-ai/core)
 [![ci](https://github.com/revu-ai/sdk-web/actions/workflows/ci.yml/badge.svg)](https://github.com/revu-ai/sdk-web/actions/workflows/ci.yml)
 [![license](https://img.shields.io/npm/l/@revu-ai/core.svg)](https://github.com/revu-ai/sdk-web/blob/main/LICENSE)
-[![size](https://img.shields.io/badge/min-33.71%20kB-blue)](#size)
-[![gzip](https://img.shields.io/badge/gzip-10.58%20kB-blue)](#size)
+[![wire](https://img.shields.io/badge/brotli-9.44%20kB-blue)](#size)
+[![gzip](https://img.shields.io/badge/gzip-10.5%20kB-blue)](#size)
 
 The lean capture core of the REVU Web SDK. One line in your page
 captures pageviews, clicks, scroll depth, form submits, downloads,
@@ -25,7 +25,7 @@ revu.capture("checkout_completed", { plan: "pro" }); // optional explicit event
 revu.reset(); // on logout
 ```
 
-ESM only. **Zero runtime dependencies.** 33.71 kB minified, 10.58 kB gzipped.
+ESM only. **Zero runtime dependencies.** 9.44 kB brotli on the wire, 10.5 kB gzipped.
 
 ## Documentation
 
@@ -122,7 +122,7 @@ The CDN sets long-cache headers on pinned URLs (the file at a given
 version never changes), and a short cache TTL on `latest` so a release
 propagates within minutes. Every response is pre-compressed at
 publish time, so a modern browser receives the bundle as brotli
-(typically around 9 kB on the wire for the current version).
+(9.44 kB on the wire for the current version).
 
 If you would rather self-host, copy
 `node_modules/@revu-ai/core/dist/index.js` into your own asset
@@ -196,22 +196,32 @@ captured on those engines simply omit `context.connection_type` and
 
 ## Size
 
-| Metric          | Current | Budget |
-| --------------- | ------- | ------ |
-| Minified        | 33.71 kB | 34 kB  |
-| Gzipped on wire | 10.58 kB  | 12 kB  |
+| Metric                     | Current  | Budget   |
+| -------------------------- | -------- | -------- |
+| Brotli on the wire         | 9.44 kB  | 10 kB    |
+| Gzipped (fallback path)    | 10.5 kB  | 11.5 kB  |
+| Minified (parse cost)      | 34.16 kB | 37.5 kB  |
 
-Both axes are CI gates (`bun run size`). Gzipped is the transfer cost
-users pay; minified is the parse and compile cost the browser pays on
-low-end devices. The budget is a deliberate constraint so the SDK
-cold-loads on any page without being noticed.
+All three are CI gates (`bun run size`), and all three derive from one
+number: the brotli budget. Brotli is what you actually download, because
+`cdn.revu.ai` pre-compresses every asset with brotli at publish time and
+serves that variant to any browser advertising it, which every modern
+browser does. A 10 kB brotli budget is what "cold-loads in single-digit
+kilobytes" means in practice, so that is the promise CI enforces.
 
-When the SDK is served from `cdn.revu.ai`, the actual wire cost is
-lower than the gzipped budget: the CDN pre-compresses each asset with
-brotli at publish time and serves the brotli variant to every browser
-that supports it (every modern browser does). The current bundle ships
-as around 9 kB on the wire for browsers that advertise brotli, with
-gzip as the fallback.
+The other two gates are derived rather than set, so neither can be
+loosened on its own:
+
+- **Gzip** is the fallback transfer path, for an edge or client that
+  cannot negotiate brotli. Its limit tracks the brotli budget.
+- **Minified** is not a transfer cost at all; it is the parse and
+  compile cost a low-end device pays. It is expressed as a maximum
+  ratio to the compressed size, so it trips when the bundle grows
+  faster uncompressed than compressed, which is the one thing a raw
+  byte count can usefully detect that the compressed gates would hide.
+
+Buying room therefore means raising the brotli budget, which is a
+deliberate decision about the promise above, not a build fix.
 
 ## Versioning and stability
 

@@ -16,7 +16,11 @@ Give the server a second, independent source for the browser a visitor claims to
 
 ### Size
 
-- **Bundle size: 34.16 kB minified / 10.5 kB gzipped** (around 9 kB brotli on the wire). The three fields cost around 0.4 kB minified and 0.1 kB gzipped. The minified CI gate moves from 34 kB to 35 kB to carry them; the gzip gates are unchanged at 12 kB (ESM) and 13 kB (IIFE), with the build sitting well under both.
+- **Bundle size: 9.44 kB brotli on the wire / 10.5 kB gzipped / 34.16 kB minified.** The three fields cost around 0.1 kB on the wire.
+
+### Changed
+
+- **The size budget is now one number instead of four.** `packages/core/.size-limit.js` declares a single brotli budget of 10 kB, which is what "cold-loads in single-digit kilobytes" means for a browser downloading the SDK from the CDN, and derives the gzip (fallback transfer) and raw-minified (parse cost) gates from it. Previously each gate was an independent figure, so a gate could be raised on its own to admit a change; now buying room means raising the one budget, which is a deliberate decision rather than a build fix. The raw-minified gate is also expressed as a maximum ratio to compressed size rather than a fixed byte count, so it detects the one thing it usefully can: the bundle growing faster uncompressed than compressed. Brotli was never gated before this, despite being the figure the README quoted.
 
 ## [0.3.0] - 2026-09-05
 
