@@ -132,15 +132,12 @@ export class Context {
       // fingerprinting-relevant.
       const ua = /** @type {any} */ (navigator).userAgentData;
       if (ua) {
-        // Copied entry by entry rather than referenced. `brands` is a
-        // FrozenArray the engine hands back, and assigning it directly would
-        // put one shared, frozen array on the session context and on every
-        // event built from it, where every other context value is a
-        // primitive. A `beforeSend` hook that tried to adjust it would throw
-        // (fail-open, so nothing breaks, but the hook silently loses). The
-        // copy keeps the list ordinary, mutable data like the rest of the
-        // bucket. Contents pass through as reported, GREASE entry and all:
-        // the server compares them verbatim against the UA string.
+        // Read once per page load and held as plain data. `brands` is a
+        // FrozenArray the engine hands back, so it is copied out rather than
+        // referenced; `build()` then copies again per event, which is what
+        // keeps a `beforeSend` edit from leaking across events. Contents
+        // pass through as reported, GREASE entry and all: the server
+        // compares them verbatim against the UA string.
         if (Array.isArray(ua.brands)) {
           ctx.ua_brands = ua.brands.map((/** @type {any} */ b) => ({
             brand: b.brand,
@@ -216,9 +213,22 @@ export class Context {
    * across the page load; volatile values are sampled fresh on each call.
    * The result is placed in the event's top-level `context` bucket by
    * `client.record()`, separate from caller `properties`.
+   *
+   * The spread is shallow, which is enough for every session field except
+   * `ua_brands`, the only non-primitive among them. `beforeSend` is
+   * documented to hand the caller an event they may mutate, and unlike
+   * `properties` the context bucket is not re-sanitized afterwards, so a
+   * hook that adjusted a shared array would leak that edit into every later
+   * event on the page. Each event therefore gets its own copy. The cost is a
+   * two-element map, which is the scale invariant 2 is content with; the
+   * alternative, one array shared by every event on a surface callers are
+   * invited to mutate, is a silent cross-event bug.
    * @returns {Record<string, unknown>}
    */
   build() {
-    return { ...this.session, ...this._forEvent() };
+    const ctx = { ...this.session, ...this._forEvent() };
+    const brands = /** @type {{ brand: string, version: string }[]|undefined} */ (ctx.ua_brands);
+    if (brands) ctx.ua_brands = brands.map((b) => ({ brand: b.brand, version: b.version }));
+    return ctx;
   }
 }

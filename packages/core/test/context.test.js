@@ -130,12 +130,9 @@ describe("Context > User-Agent Client Hints (low-entropy set)", () => {
     expect(frozen.length).toBe(1);
   });
 
-  test("reads the engine once per page load, like every other session field", () => {
-    // The copy is taken once, in _buildSessionContext, and shared across
-    // events exactly as the rest of `session` is. build() is a shallow
-    // spread, so it stays one array per page load rather than one per event:
-    // re-copying on every record() would buy only protection against a
-    // beforeSend hook mutating it, at a per-event cost on every event.
+  test("reads the engine once per page load, but copies per event", () => {
+    // The engine read is session-scoped; the per-event copy is what keeps a
+    // beforeSend edit on one event out of every later event.
     let reads = 0;
     Object.defineProperty(navigator, "userAgentData", {
       configurable: true,
@@ -148,7 +145,19 @@ describe("Context > User-Agent Client Hints (low-entropy set)", () => {
     const first = /** @type {any[]} */ (c.build().ua_brands);
     const second = /** @type {any[]} */ (c.build().ua_brands);
     expect(reads).toBe(1);
-    expect(second).toBe(first);
+    expect(second).toEqual(first);
+    expect(second).not.toBe(first);
+    expect(second[0]).not.toBe(first[0]);
+  });
+
+  test("a beforeSend-style edit on one event does not reach the next", () => {
+    stub({ brands: [{ brand: "Chromium", version: "142" }], mobile: false, platform: "macOS" });
+    const c = new Context();
+    const first = /** @type {any[]} */ (c.build().ua_brands);
+    first.push({ brand: "Injected", version: "1" });
+    first[0].version = "999";
+    const next = /** @type {any[]} */ (c.build().ua_brands);
+    expect(next).toEqual([{ brand: "Chromium", version: "142" }]);
   });
 
   test("omits the whole trio on a browser without the API", () => {
