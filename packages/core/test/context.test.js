@@ -211,6 +211,32 @@ describe("Context > navigator.languages", () => {
     expect(ctx.languages).toEqual([]);
   });
 
+  test("copies the engine array, so it is not shared onto events", () => {
+    // navigator.languages is a FrozenArray owned by the engine, same as
+    // userAgentData.brands. Referencing it would put the engine's own frozen
+    // array on every event.
+    const live = Object.freeze(["en-US", "en"]);
+    Object.defineProperty(navigator, "languages", { value: live, configurable: true });
+    const c = new Context();
+    const first = /** @type {string[]} */ (c.build().languages);
+    const second = /** @type {string[]} */ (c.build().languages);
+    expect(first).toEqual(["en-US", "en"]);
+    expect(first).not.toBe(live);
+    expect(second).not.toBe(first);
+    expect(Object.isFrozen(first)).toBe(false);
+  });
+
+  test("a beforeSend-style edit on one event does not reach the next", () => {
+    Object.defineProperty(navigator, "languages", {
+      value: ["en-US", "en"],
+      configurable: true,
+    });
+    const c = new Context();
+    const first = /** @type {string[]} */ (c.build().languages);
+    first.push("INJECTED");
+    expect(/** @type {string[]} */ (c.build().languages)).toEqual(["en-US", "en"]);
+  });
+
   test("omits the field when the browser does not expose an array", () => {
     Object.defineProperty(navigator, "languages", { value: undefined, configurable: true });
     const ctx = new Context().build();
@@ -243,6 +269,52 @@ describe("Context > navigation type", () => {
     // @ts-expect-error test stub
     performance.getEntriesByType = () => { throw new Error("unsupported"); };
     expect(() => new Context().build()).not.toThrow();
+  });
+});
+
+describe("Context > hostile navigator getters", () => {
+  // A UA-spoofing extension or privacy tool can replace any navigator
+  // property with a getter of its own. Unguarded, a throwing one would leave
+  // the Context constructor, and init() could only contain it by failing the
+  // whole SDK: the host page survives, but the visitor produces no analytics
+  // at all. Each case below must cost at most the field it belongs to.
+  const saved = ["userAgentData", "languages", "userAgent", "webdriver"].map((k) => [
+    k,
+    Object.getOwnPropertyDescriptor(navigator, k),
+  ]);
+  afterEach(() => {
+    for (const [k, d] of saved) {
+      if (d) Object.defineProperty(navigator, k, d);
+      else { try { delete /** @type {any} */ (navigator)[k]; } catch {} }
+    }
+  });
+  const explode = (/** @type {string} */ key) =>
+    Object.defineProperty(navigator, key, {
+      configurable: true,
+      get() { throw new Error(`${key} spoofer threw`); },
+    });
+
+  for (const key of ["userAgentData", "languages", "userAgent", "webdriver"]) {
+    test(`survives a throwing ${key} getter`, () => {
+      explode(key);
+      expect(() => new Context().build()).not.toThrow();
+    });
+  }
+
+  test("a throwing userAgentData still leaves the earlier signals intact", () => {
+    // userAgentData is read last precisely so a throw there is cheap.
+    Object.defineProperty(navigator, "languages", {
+      value: ["en-US", "en"],
+      configurable: true,
+    });
+    Object.defineProperty(navigator, "webdriver", { value: true, configurable: true });
+    explode("userAgentData");
+    const ctx = new Context().build();
+    expect(ctx.languages).toEqual(["en-US", "en"]);
+    expect(ctx.webdriver).toBe(true);
+    expect("ua_brands" in ctx).toBe(false);
+    // Fields collected outside the navigator block are untouched either way.
+    expect(typeof ctx.timezone).toBe("string");
   });
 });
 

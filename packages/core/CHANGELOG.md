@@ -16,7 +16,12 @@ Give the server a second, independent source for the browser a visitor claims to
 
 ### Size
 
-- **Bundle size: 9.49 kB brotli on the wire / 10.55 kB gzipped / 34.3 kB minified.** The three fields cost around 0.1 kB on the wire.
+- **Bundle size: 9.5 kB brotli on the wire / 10.56 kB gzipped / 34.38 kB minified.** The three fields cost around 0.1 kB on the wire.
+
+### Fixed
+
+- **Array-valued context fields are no longer shared between events.** `context.ua_brands` and `context.languages` are `FrozenArray` values owned by the browser engine. They are now copied when read and copied again per event, so a `beforeSend` hook that adjusts one event's list cannot leak that edit into every later event on the page, and the engine's own arrays are never handed out. Every other context value is a primitive and was never affected.
+- **A hostile `navigator` getter can no longer suppress all capture.** User-agent spoofing extensions and privacy tools replace `navigator` properties with getters of their own, and a badly written one throws on read. Every `navigator` read in the context layer is now guarded, so such a getter costs at most the field it belongs to instead of failing `init()` and leaving the visitor with no analytics. `userAgentData`, the property those tools replace most often, is read last so a throw there cannot cost the signals collected before it.
 
 ### Changed
 

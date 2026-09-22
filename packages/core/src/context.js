@@ -60,13 +60,20 @@ export class Context {
     /** @type {Record<string, unknown>} */
     const ctx = {};
 
-    if (typeof navigator !== "undefined") {
-      if (typeof navigator.userAgent === "string") {
-        ctx.user_agent = navigator.userAgent;
+    // Every navigator read here and below sits inside a try/catch. These look
+    // like plain property reads, but a UA-spoofing extension or privacy tool
+    // can replace any of them with a getter of its own, and a badly written
+    // one throws. Unguarded, that exception leaves the constructor and
+    // `init()` can only contain it by failing the whole SDK: the host page
+    // survives (invariant 1) but the visitor produces no analytics at all.
+    // Catching here downgrades the worst case to one missing field.
+    try {
+      if (typeof navigator !== "undefined") {
+        if (typeof navigator.userAgent === "string") ctx.user_agent = navigator.userAgent;
+        if (typeof navigator.language === "string") ctx.language = navigator.language;
       }
-      if (typeof navigator.language === "string") {
-        ctx.language = navigator.language;
-      }
+    } catch {
+      // Hostile or broken navigator getter. Skip the field, keep the SDK.
     }
 
     if (typeof screen !== "undefined") {
@@ -102,58 +109,65 @@ export class Context {
     const gpc = readGpc();
     if (typeof gpc === "boolean") ctx.gpc = gpc;
 
-    // Three engine-reported signals, read from one `navigator` guard.
-    if (typeof navigator !== "undefined") {
-      // navigator.webdriver: the standardized automation flag. It is true
-      // under Selenium / Playwright / Puppeteer / headless Chrome and most
-      // synthetic monitors, and false or absent for a real browser. Stamped
-      // ONLY when true, so a genuine visit adds zero bytes (size budget) and
-      // the field's presence alone is the signal. It lets the server classify
-      // automated traffic that carries a human-looking user agent (a headless
-      // Chrome on a normal UA string, which server-side UA parsing cannot
-      // catch on its own). Session-stable, so it rides every event including
-      // the first $pageview, which is what lets the server pin the visitor's
-      // type correctly on first sight.
-      if (navigator.webdriver === true) ctx.webdriver = true;
+    // The engine-reported signals, behind the same guard. `userAgentData` is
+    // read LAST because it is the property UA-spoofing extensions most often
+    // replace, so a throw there costs only itself and not the fields that
+    // would otherwise follow it.
+    try {
+      if (typeof navigator !== "undefined") {
+        // navigator.webdriver: the standardized automation flag. It is true
+        // under Selenium / Playwright / Puppeteer / headless Chrome and most
+        // synthetic monitors, and false or absent for a real browser. Stamped
+        // ONLY when true, so a genuine visit adds zero bytes (size budget) and
+        // the field's presence alone is the signal. It lets the server
+        // classify automated traffic that carries a human-looking user agent
+        // (a headless Chrome on a normal UA string, which server-side UA
+        // parsing cannot catch on its own). Session-stable, so it rides every
+        // event including the first $pageview, which is what lets the server
+        // pin the visitor's type correctly on first sight.
+        if (navigator.webdriver === true) ctx.webdriver = true;
 
-      // User-Agent Client Hints, low-entropy set. The browser ENGINE
-      // generates these, so a client that sets a UA header or redefines
-      // `navigator.userAgent` does not get matching hints for free. That
-      // gives the server a second, independent source for the claimed
-      // browser, instead of only checking a user agent string against itself.
-      // Chromium 90+ and secure contexts only, so absent on Safari, Firefox,
-      // and any plain-http page: read defensively and omit when not there.
-      // Low entropy by definition (Chromium already sends the same three
-      // values as `Sec-CH-UA` request headers), so this adds no
-      // fingerprinting surface over the request itself. The high-entropy set
-      // (`getHighEntropyValues`) is deliberately NOT read: it is asynchronous,
-      // so it would miss the first $pageview, which is the event the server
-      // pins the visitor's type from, and it is genuinely
-      // fingerprinting-relevant.
-      const ua = /** @type {any} */ (navigator).userAgentData;
-      if (ua) {
-        // Read once per page load and held as plain data. `brands` is a
-        // FrozenArray the engine hands back, so it is copied out rather than
-        // referenced; `build()` then copies again per event, which is what
-        // keeps a `beforeSend` edit from leaking across events. Contents
-        // pass through as reported, GREASE entry and all: the server
-        // compares them verbatim against the UA string.
-        if (Array.isArray(ua.brands)) {
-          ctx.ua_brands = ua.brands.map((/** @type {any} */ b) => ({
-            brand: b.brand,
-            version: b.version,
-          }));
+        // navigator.languages (the plural). An EMPTY array is the signal, a
+        // long-standing headless marker, so the field is stamped even when
+        // empty, unlike `webdriver`, where absence is the normal case. Low
+        // entropy: the same information is already in the `Accept-Language`
+        // request header. Copied out because it is a FrozenArray owned by the
+        // engine; `build()` then copies again per event.
+        if (Array.isArray(navigator.languages)) ctx.languages = navigator.languages.slice();
+
+        // User-Agent Client Hints, low-entropy set. The browser ENGINE
+        // generates these, so a client that sets a UA header or redefines
+        // `navigator.userAgent` does not get matching hints for free. That
+        // gives the server a second, independent source for the claimed
+        // browser, instead of only checking a user agent string against
+        // itself. Chromium 90+ and secure contexts only, so absent on Safari,
+        // Firefox, and any plain-http page: read defensively and omit when
+        // not there. Low entropy by definition (Chromium already sends the
+        // same three values as `Sec-CH-UA` request headers), so this adds no
+        // fingerprinting surface over the request itself. The high-entropy
+        // set (`getHighEntropyValues`) is deliberately NOT read: it is
+        // asynchronous, so it would miss the first $pageview that the server
+        // pins the visitor's type from, and it is genuinely
+        // fingerprinting-relevant.
+        const ua = /** @type {any} */ (navigator).userAgentData;
+        if (ua) {
+          // Read once per page load and held as plain data. `brands` is a
+          // FrozenArray the engine hands back, so it is copied out rather
+          // than referenced. Contents pass through as reported, GREASE entry
+          // and all: the server compares them verbatim against the UA string.
+          if (Array.isArray(ua.brands)) {
+            ctx.ua_brands = ua.brands.map((/** @type {any} */ b) => ({
+              brand: b.brand,
+              version: b.version,
+            }));
+          }
+          if (typeof ua.mobile === "boolean") ctx.ua_mobile = ua.mobile;
+          if (typeof ua.platform === "string") ctx.ua_platform = ua.platform;
         }
-        if (typeof ua.mobile === "boolean") ctx.ua_mobile = ua.mobile;
-        if (typeof ua.platform === "string") ctx.ua_platform = ua.platform;
       }
-
-      // navigator.languages (the plural). An EMPTY array is the signal, a
-      // long-standing headless marker, so the field is stamped even when
-      // empty, unlike `webdriver`, where absence is the normal case. Low
-      // entropy: the same information is already in the `Accept-Language`
-      // request header.
-      if (Array.isArray(navigator.languages)) ctx.languages = navigator.languages;
+    } catch {
+      // Hostile or broken navigator getter. Keep every field already
+      // collected and carry on.
     }
 
     // Navigation type: "navigate" | "reload" | "back_forward" | "prerender".
@@ -215,20 +229,22 @@ export class Context {
    * `client.record()`, separate from caller `properties`.
    *
    * The spread is shallow, which is enough for every session field except
-   * `ua_brands`, the only non-primitive among them. `beforeSend` is
+   * the two array-valued ones, `ua_brands` and `languages`. `beforeSend` is
    * documented to hand the caller an event they may mutate, and unlike
    * `properties` the context bucket is not re-sanitized afterwards, so a
    * hook that adjusted a shared array would leak that edit into every later
-   * event on the page. Each event therefore gets its own copy. The cost is a
-   * two-element map, which is the scale invariant 2 is content with; the
-   * alternative, one array shared by every event on a surface callers are
-   * invited to mutate, is a silent cross-event bug.
+   * event on the page. Each event therefore gets its own copies. The cost is
+   * a short slice and a two-element map, which is the scale invariant 2 is
+   * content with; the alternative, arrays shared by every event on a surface
+   * callers are invited to mutate, is a silent cross-event bug.
    * @returns {Record<string, unknown>}
    */
   build() {
     const ctx = { ...this.session, ...this._forEvent() };
     const brands = /** @type {{ brand: string, version: string }[]|undefined} */ (ctx.ua_brands);
     if (brands) ctx.ua_brands = brands.map((b) => ({ brand: b.brand, version: b.version }));
+    const languages = /** @type {string[]|undefined} */ (ctx.languages);
+    if (languages) ctx.languages = languages.slice();
     return ctx;
   }
 }
