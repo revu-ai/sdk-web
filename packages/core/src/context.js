@@ -132,9 +132,21 @@ export class Context {
       // fingerprinting-relevant.
       const ua = /** @type {any} */ (navigator).userAgentData;
       if (ua) {
-        // The brand list is passed through as reported, GREASE entry and all:
-        // the server compares it verbatim against the UA string.
-        if (Array.isArray(ua.brands)) ctx.ua_brands = ua.brands;
+        // Copied entry by entry rather than referenced. `brands` is a
+        // FrozenArray the engine hands back, and assigning it directly would
+        // put one shared, frozen array on the session context and on every
+        // event built from it, where every other context value is a
+        // primitive. A `beforeSend` hook that tried to adjust it would throw
+        // (fail-open, so nothing breaks, but the hook silently loses). The
+        // copy keeps the list ordinary, mutable data like the rest of the
+        // bucket. Contents pass through as reported, GREASE entry and all:
+        // the server compares them verbatim against the UA string.
+        if (Array.isArray(ua.brands)) {
+          ctx.ua_brands = ua.brands.map((/** @type {any} */ b) => ({
+            brand: b.brand,
+            version: b.version,
+          }));
+        }
         if (typeof ua.mobile === "boolean") ctx.ua_mobile = ua.mobile;
         if (typeof ua.platform === "string") ctx.ua_platform = ua.platform;
       }

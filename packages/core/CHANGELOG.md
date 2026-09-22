@@ -16,7 +16,7 @@ Give the server a second, independent source for the browser a visitor claims to
 
 ### Size
 
-- **Bundle size: 9.44 kB brotli on the wire / 10.5 kB gzipped / 34.16 kB minified.** The three fields cost around 0.1 kB on the wire.
+- **Bundle size: 9.46 kB brotli on the wire / 10.52 kB gzipped / 34.21 kB minified.** The three fields cost around 0.1 kB on the wire.
 
 ### Changed
 

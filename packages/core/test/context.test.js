@@ -114,6 +114,43 @@ describe("Context > User-Agent Client Hints (low-entropy set)", () => {
     ]);
   });
 
+  test("copies the brand list, so a frozen engine array is not shared onto events", () => {
+    // navigator.userAgentData.brands is a FrozenArray. Referencing it would
+    // put one frozen array on the session context and on every event built
+    // from it; the copy keeps the bucket ordinary, mutable data.
+    const frozen = Object.freeze([Object.freeze({ brand: "Chromium", version: "142" })]);
+    stub({ brands: frozen, mobile: false, platform: "macOS" });
+    const built = new Context().build();
+    const list = /** @type {any[]} */ (built.ua_brands);
+    expect(list).not.toBe(frozen);
+    expect(Object.isFrozen(list)).toBe(false);
+    expect(Object.isFrozen(list[0])).toBe(false);
+    // A beforeSend-style adjustment must not throw and must not reach the engine.
+    expect(() => list.push({ brand: "Added", version: "1" })).not.toThrow();
+    expect(frozen.length).toBe(1);
+  });
+
+  test("reads the engine once per page load, like every other session field", () => {
+    // The copy is taken once, in _buildSessionContext, and shared across
+    // events exactly as the rest of `session` is. build() is a shallow
+    // spread, so it stays one array per page load rather than one per event:
+    // re-copying on every record() would buy only protection against a
+    // beforeSend hook mutating it, at a per-event cost on every event.
+    let reads = 0;
+    Object.defineProperty(navigator, "userAgentData", {
+      configurable: true,
+      get() {
+        reads += 1;
+        return { brands: [{ brand: "Chromium", version: "142" }], mobile: false, platform: "macOS" };
+      },
+    });
+    const c = new Context();
+    const first = /** @type {any[]} */ (c.build().ua_brands);
+    const second = /** @type {any[]} */ (c.build().ua_brands);
+    expect(reads).toBe(1);
+    expect(second).toBe(first);
+  });
+
   test("omits the whole trio on a browser without the API", () => {
     stub(undefined);
     const ctx = new Context().build();
