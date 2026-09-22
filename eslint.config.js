@@ -38,6 +38,7 @@ export default [
         URLSearchParams: "readonly",
         Intl: "readonly",
         screen: "readonly",
+        performance: "readonly",
         PerformanceObserver: "readonly",
         PerformanceEntry: "readonly",
         Document: "readonly",

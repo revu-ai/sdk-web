@@ -12,7 +12,7 @@
  * Two layers:
  *
  *   - Session-scoped: built once on construction, the same values on every
- *     event until the page is reloaded. UA, language, timezone, screen,
+ *     event until the page is reloaded. UA, languages, timezone, screen,
  *     and the initial referrer are session-stable.
  *   - Per-event volatile: re-read on every record() call. Viewport size
  *     changes on resize, connection type can flip between cellular and
@@ -46,8 +46,10 @@ export class Context {
 
   /**
    * Snapshot the values that do not change inside a single page load:
-   * user agent, language, timezone, screen geometry, and the URL-scoped
-   * attribution fields (initial referrer + UTM / click ids). The same
+   * user agent (string plus the low-entropy client hints), languages,
+   * timezone, screen geometry, the automation and navigation-type signals,
+   * and the URL-scoped attribution fields (initial referrer + UTM / click
+   * ids). The same
    * values stamp every event until the page is reloaded - which is the
    * right semantic for campaign attribution (UTM should land on the
    * pageview AND on the click the visitor made after it, not just the
@@ -100,17 +102,65 @@ export class Context {
     const gpc = readGpc();
     if (typeof gpc === "boolean") ctx.gpc = gpc;
 
-    // navigator.webdriver: the standardized automation flag. It is true under
-    // Selenium / Playwright / Puppeteer / headless Chrome and most synthetic
-    // monitors, and false or absent for a real browser. Stamped ONLY when true,
-    // so a genuine visit adds zero bytes (size budget) and the field's presence
-    // alone is the signal. It lets the server classify automated traffic that
-    // carries a human-looking user agent (a headless Chrome on a normal UA
-    // string, which server-side UA parsing cannot catch on its own). Session-
-    // stable, so it rides every event including the first $pageview, which is
-    // what lets the server pin the visitor's type correctly on first sight.
-    if (typeof navigator !== "undefined" && navigator.webdriver === true) {
-      ctx.webdriver = true;
+    // Three engine-reported signals, read from one `navigator` guard.
+    if (typeof navigator !== "undefined") {
+      // navigator.webdriver: the standardized automation flag. It is true
+      // under Selenium / Playwright / Puppeteer / headless Chrome and most
+      // synthetic monitors, and false or absent for a real browser. Stamped
+      // ONLY when true, so a genuine visit adds zero bytes (size budget) and
+      // the field's presence alone is the signal. It lets the server classify
+      // automated traffic that carries a human-looking user agent (a headless
+      // Chrome on a normal UA string, which server-side UA parsing cannot
+      // catch on its own). Session-stable, so it rides every event including
+      // the first $pageview, which is what lets the server pin the visitor's
+      // type correctly on first sight.
+      if (navigator.webdriver === true) ctx.webdriver = true;
+
+      // User-Agent Client Hints, low-entropy set. The browser ENGINE
+      // generates these, so a client that sets a UA header or redefines
+      // `navigator.userAgent` does not get matching hints for free. That
+      // gives the server a second, independent source for the claimed
+      // browser, instead of only checking a user agent string against itself.
+      // Chromium 90+ and secure contexts only, so absent on Safari, Firefox,
+      // and any plain-http page: read defensively and omit when not there.
+      // Low entropy by definition (Chromium already sends the same three
+      // values as `Sec-CH-UA` request headers), so this adds no
+      // fingerprinting surface over the request itself. The high-entropy set
+      // (`getHighEntropyValues`) is deliberately NOT read: it is asynchronous,
+      // so it would miss the first $pageview, which is the event the server
+      // pins the visitor's type from, and it is genuinely
+      // fingerprinting-relevant.
+      const ua = /** @type {any} */ (navigator).userAgentData;
+      if (ua) {
+        // The brand list is passed through as reported, GREASE entry and all:
+        // the server compares it verbatim against the UA string.
+        if (Array.isArray(ua.brands)) ctx.ua_brands = ua.brands;
+        if (typeof ua.mobile === "boolean") ctx.ua_mobile = ua.mobile;
+        if (typeof ua.platform === "string") ctx.ua_platform = ua.platform;
+      }
+
+      // navigator.languages (the plural). An EMPTY array is the signal, a
+      // long-standing headless marker, so the field is stamped even when
+      // empty, unlike `webdriver`, where absence is the normal case. Low
+      // entropy: the same information is already in the `Accept-Language`
+      // request header.
+      if (Array.isArray(navigator.languages)) ctx.languages = navigator.languages;
+    }
+
+    // Navigation type: "navigate" | "reload" | "back_forward" | "prerender".
+    // Both attribution models key off the visitor's first `$pageview` and
+    // cannot otherwise tell a genuine landing from a reload or a
+    // back-forward, which inflates entry pages and session starts. Read once
+    // at construction: the navigation entry describes this page load and does
+    // not change inside it.
+    try {
+      const nav = performance.getEntriesByType("navigation")[0];
+      if (nav && typeof /** @type {any} */ (nav).type === "string") {
+        ctx.navigation_type = /** @type {any} */ (nav).type;
+      }
+    } catch {
+      // No Navigation Timing Level 2 entry (or no `performance` at all).
+      // Best-effort.
     }
 
     return ctx;

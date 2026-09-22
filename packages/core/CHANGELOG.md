@@ -4,6 +4,20 @@ All notable changes to `@revu-ai/core` are documented here.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+Give the server a second, independent source for the browser a visitor claims to be, so automated traffic that wears a convincing user agent can be caught by contradiction rather than by pattern matching a string against itself.
+
+### Added
+
+- **`context.ua_brands` / `context.ua_mobile` / `context.ua_platform`.** The low-entropy User-Agent Client Hints, read synchronously from `navigator.userAgentData` and stamped on every event. The browser engine generates these, so a client that sets a UA header or redefines `navigator.userAgent` does not get matching hints to go with it, and the server can cross-check one source against the other. Chromium and secure contexts only, so the trio is absent on Safari, Firefox, and plain-http pages and is simply omitted there. The brand list is passed through as reported, including the randomized GREASE entry, which the server compares verbatim. The high-entropy set (`getHighEntropyValues()`) is deliberately not read: it is asynchronous, so it would miss the first `$pageview` that the server pins the visitor's type from, and the full version list, platform version, and device model are fingerprinting-relevant.
+- **`context.languages`.** The browser's ordered language list (the plural `navigator.languages`, alongside the existing singular `context.language`). An empty list is stamped rather than omitted, because an empty list is itself the signal. Low entropy: the same information already rides every request as `Accept-Language`.
+- **`context.navigation_type`.** The Navigation Timing entry type for this page load (`navigate`, `reload`, `back_forward`, or `prerender`), so a genuine landing can be told apart from a reload or a back-forward. Both attribution models key off the visitor's first `$pageview` and could not previously distinguish the three.
+
+### Size
+
+- **Bundle size: 34.16 kB minified / 10.5 kB gzipped** (around 9 kB brotli on the wire). The three fields cost around 0.4 kB minified and 0.1 kB gzipped. The minified CI gate moves from 34 kB to 35 kB to carry them; the gzip gates are unchanged at 12 kB (ESM) and 13 kB (IIFE), with the build sitting well under both.
+
 ## [0.3.0] - 2026-09-05
 
 Capture the browser automation signal so the server can separate headless and synthetic traffic from real visits, even when the automated client wears a normal browser user agent.

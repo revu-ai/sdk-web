@@ -173,8 +173,10 @@ init, plus one event per interaction.
 | `$identify`, `$reset`, `$alias` | Identity transitions                                                                            |
 
 Every event also carries an engine `context` bucket (`user_agent`,
-`language`, `timezone`, screen and viewport geometry, online state,
-connection type when available, initial referrer, consent state) and a
+`language`, `languages`, `timezone`, navigation type, screen and
+viewport geometry, online state, connection type and low-entropy
+User-Agent Client Hints when available, initial referrer, consent
+state) and a
 `sdk_version` stamp so the server can correlate behavior with the exact
 SDK build that produced it. `context` is separate from your `capture()`
 `properties`, so the two never collide.

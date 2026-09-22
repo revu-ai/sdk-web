@@ -111,6 +111,34 @@ require shipping a dictionary, an algorithm, or a model to the browser
 stays server-side. That is what keeps the bundle in single-digit
 kilobytes.
 
+## Environment signals
+
+Alongside the interaction itself, every event carries a small set of
+environment signals the browser reports about itself. They describe the
+client, never the person using it.
+
+- **User-Agent Client Hints, low-entropy set only.** `ua_brands`,
+  `ua_mobile`, and `ua_platform` are read from
+  `navigator.userAgentData` where the browser exposes it (Chromium and
+  secure contexts; absent on Safari, Firefox, and plain-http pages, and
+  simply omitted there). These are the same three values the browser
+  already sends on every request as `Sec-CH-UA` headers, so they add no
+  fingerprinting surface over the request itself. The SDK does **not**
+  call `getHighEntropyValues()`: the full version list, platform
+  version, and device model are fingerprinting-relevant and are never
+  requested.
+- **`languages`.** The browser's ordered language list, the same
+  information it already sends as `Accept-Language`.
+- **`navigation_type`.** Whether this page load was a fresh navigation,
+  a reload, a back-forward restore, or a prerender, so a genuine landing
+  can be told apart from a repeat view.
+- **`webdriver`.** Stamped only when the browser reports that it is
+  being driven by automation, and omitted otherwise.
+
+None of these read storage, ask for a permission, or probe the device.
+They exist so automated traffic can be separated from real visits, which
+keeps your numbers honest.
+
 ## Consent
 
 Capture is gated on a per-category consent state the host controls at

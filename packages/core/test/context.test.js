@@ -70,6 +70,136 @@ describe("Context > automation signal (navigator.webdriver)", () => {
   });
 });
 
+describe("Context > User-Agent Client Hints (low-entropy set)", () => {
+  const original = Object.getOwnPropertyDescriptor(navigator, "userAgentData");
+  const restore = () => {
+    if (original) Object.defineProperty(navigator, "userAgentData", original);
+    else { try { delete /** @type {any} */ (navigator).userAgentData; } catch {} }
+  };
+  const stub = (/** @type {any} */ value) =>
+    Object.defineProperty(navigator, "userAgentData", { value, configurable: true });
+
+  afterEach(restore);
+
+  test("stamps brands, mobile, and platform when the browser exposes them", () => {
+    stub({
+      brands: [
+        { brand: "Not_A Brand", version: "8" },
+        { brand: "Chromium", version: "142" },
+      ],
+      mobile: false,
+      platform: "macOS",
+    });
+    const ctx = new Context().build();
+    expect(ctx.ua_brands).toEqual([
+      { brand: "Not_A Brand", version: "8" },
+      { brand: "Chromium", version: "142" },
+    ]);
+    expect(ctx.ua_mobile).toBe(false);
+    expect(ctx.ua_platform).toBe("macOS");
+  });
+
+  test("passes the brand list through verbatim, GREASE entry included", () => {
+    // The server compares the list against the UA string, so the randomized
+    // GREASE entry must survive rather than being filtered as noise.
+    stub({
+      brands: [{ brand: "Not/A)Brand", version: "99" }, { brand: "Chromium", version: "142" }],
+      mobile: false,
+      platform: "Windows",
+    });
+    const ctx = new Context().build();
+    expect(/** @type {any[]} */ (ctx.ua_brands).map((b) => b.brand)).toEqual([
+      "Not/A)Brand",
+      "Chromium",
+    ]);
+  });
+
+  test("omits the whole trio on a browser without the API", () => {
+    stub(undefined);
+    const ctx = new Context().build();
+    expect("ua_brands" in ctx).toBe(false);
+    expect("ua_mobile" in ctx).toBe(false);
+    expect("ua_platform" in ctx).toBe(false);
+  });
+
+  test("stamps only the fields the browser actually reports", () => {
+    stub({ mobile: true });
+    const ctx = new Context().build();
+    expect("ua_brands" in ctx).toBe(false);
+    expect(ctx.ua_mobile).toBe(true);
+    expect("ua_platform" in ctx).toBe(false);
+  });
+
+  test("does not read the async high-entropy set", () => {
+    let called = false;
+    stub({
+      brands: [],
+      mobile: false,
+      platform: "macOS",
+      getHighEntropyValues: () => { called = true; return Promise.resolve({}); },
+    });
+    new Context().build();
+    expect(called).toBe(false);
+  });
+});
+
+describe("Context > navigator.languages", () => {
+  const original = Object.getOwnPropertyDescriptor(navigator, "languages");
+  afterEach(() => {
+    if (original) Object.defineProperty(navigator, "languages", original);
+    else { try { delete /** @type {any} */ (navigator).languages; } catch {} }
+  });
+
+  test("captures the plural list alongside the singular language", () => {
+    Object.defineProperty(navigator, "languages", {
+      value: ["en-US", "en", "fr"],
+      configurable: true,
+    });
+    const ctx = new Context().build();
+    expect(ctx.languages).toEqual(["en-US", "en", "fr"]);
+  });
+
+  test("keeps an empty list, since an empty list is itself the signal", () => {
+    Object.defineProperty(navigator, "languages", { value: [], configurable: true });
+    const ctx = new Context().build();
+    expect(ctx.languages).toEqual([]);
+  });
+
+  test("omits the field when the browser does not expose an array", () => {
+    Object.defineProperty(navigator, "languages", { value: undefined, configurable: true });
+    const ctx = new Context().build();
+    expect("languages" in ctx).toBe(false);
+  });
+});
+
+describe("Context > navigation type", () => {
+  const original = performance.getEntriesByType;
+  afterEach(() => {
+    performance.getEntriesByType = original;
+  });
+
+  test("captures the navigation entry type", () => {
+    // @ts-expect-error test stub
+    performance.getEntriesByType = (/** @type {string} */ type) =>
+      type === "navigation" ? [{ type: "back_forward" }] : [];
+    const ctx = new Context().build();
+    expect(ctx.navigation_type).toBe("back_forward");
+  });
+
+  test("omits the field when there is no navigation entry", () => {
+    // @ts-expect-error test stub
+    performance.getEntriesByType = () => [];
+    const ctx = new Context().build();
+    expect("navigation_type" in ctx).toBe(false);
+  });
+
+  test("never throws into the host when Navigation Timing is unavailable", () => {
+    // @ts-expect-error test stub
+    performance.getEntriesByType = () => { throw new Error("unsupported"); };
+    expect(() => new Context().build()).not.toThrow();
+  });
+});
+
 describe("Context > URL query is not parsed on the SDK", () => {
   // UTM and click-id derivation lives on the server, which parses them
   // from `$pageview.properties.url` and writes the result to the visitor

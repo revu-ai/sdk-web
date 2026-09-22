@@ -177,7 +177,11 @@ shape:
   },
   "context": {
     "user_agent": "...",
+    "ua_brands": [{ "brand": "Chromium", "version": "142" }],
+    "ua_platform": "macOS",
     "language": "en-US",
+    "languages": ["en-US", "en"],
+    "navigation_type": "navigate",
     "timezone": "Europe/London",
     "viewport_width": 1440,
     "viewport_height": 900,
@@ -216,12 +220,15 @@ shape:
   auto-populates, describing where the event happened. Keys are
   unprefixed and live in their own bucket, so they never collide with
   your `capture()` properties. It includes `user_agent`, `language`,
-  `timezone`, `environment`, `sdk_version`, `viewport_width`,
-  `viewport_height`, `screen_width`, `screen_height`,
-  `screen_pixel_ratio`, `initial_referrer`, and `consent` (the
-  per-category consent state), plus `connection_type`,
+  `languages`, `timezone`, `navigation_type`, `environment`,
+  `sdk_version`, `viewport_width`, `viewport_height`, `screen_width`,
+  `screen_height`, `screen_pixel_ratio`, `initial_referrer`, and
+  `consent` (the per-category consent state), plus `connection_type`,
   `connection_downlink_mbps`, `connection_rtt_ms`, and `save_data` when
-  the browser exposes the Network Information API, `gpc` when the browser
+  the browser exposes the Network Information API, `ua_brands` /
+  `ua_mobile` / `ua_platform` when it exposes the low-entropy
+  [User-Agent Client Hints](./privacy.md#environment-signals),
+  `webdriver` when it reports automation, `gpc` when the browser
   advertises a Global Privacy Control signal, and the
   [attribution](#attribution-first-touch-and-last-touch) fields
   (`initial_utm_*` / `utm_*` and friends) when a visitor arrived from a
