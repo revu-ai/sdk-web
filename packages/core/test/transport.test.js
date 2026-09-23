@@ -485,6 +485,34 @@ describe("Transport", () => {
     expect(t.queue.size()).toBe(1);
   });
 
+  test("a confirmed terminal send clears the backoff, so a backlog can drain", async () => {
+    // During an outage every failed flush lengthens the backoff, up to a
+    // minute. If the page then hides and the terminal send succeeds, that is
+    // direct evidence the endpoint recovered; continuing to refuse normal
+    // flushes would strand whatever is still queued behind the backoff.
+    let healthy = false;
+    mockFetch(() =>
+      Promise.resolve(new Response("", { status: healthy ? 200 : 503 })),
+    );
+    const { t } = makeTransport({ maxBatch: 1 });
+    for (let i = 1; i <= 4; i++) t.enqueue(makeEvent(i));
+
+    // Fail a few times so a real backoff accumulates.
+    await t.flush();
+    await t.flush();
+    expect(t.failures).toBeGreaterThan(0);
+    expect(t.backoffUntil).toBeGreaterThan(Date.now());
+
+    healthy = true;
+    await t.flush(true);
+    await waitUntil(() => t.failures === 0);
+
+    expect(t.backoffUntil).toBe(0);
+    // A normal flush is no longer refused, so the rest can drain.
+    await t.flush();
+    expect(t.queue.size()).toBeLessThan(3);
+  });
+
   test("survives repeated hide and show cycles without stranding events", async () => {
     // Mobile backgrounding can fire the hide signal many times in a session.
     // The in-flight guard must clear each time, or every cycle after the first

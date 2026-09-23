@@ -255,7 +255,17 @@ export class Transport {
           keepalive: true,
         })
           .then((res) => {
-            if (res.ok) this.queue.remove(batch);
+            if (res.ok) {
+              this.queue.remove(batch);
+              // A confirmed terminal send is proof the endpoint is healthy, so
+              // it clears the backoff the same way a normal one does. Without
+              // this, a session that backed off during an outage keeps
+              // refusing normal flushes for up to the backoff ceiling even
+              // after it has evidence of recovery, which strands a backlog
+              // that could have been draining.
+              this.failures = 0;
+              this.backoffUntil = 0;
+            }
           })
           .catch(() => {
             // Page gone, or the send failed. The batch is still queued.
