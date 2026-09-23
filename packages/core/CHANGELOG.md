@@ -4,7 +4,7 @@ All notable changes to `@revu-ai/core` are documented here.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.4.0] - 2026-09-23
 
 Give the server a second, independent source for the browser a visitor claims to be, so automated traffic that wears a convincing user agent can be caught by contradiction rather than by pattern matching a string against itself.
 
@@ -31,8 +31,6 @@ Give the server a second, independent source for the browser a visitor claims to
 ### Changed
 
 - **The size budget is now one number instead of four.** `packages/core/.size-limit.js` declares a single brotli budget of 10 kB, which is what "cold-loads in single-digit kilobytes" means for a browser downloading the SDK from the CDN, and derives the gzip (fallback transfer) and raw-minified (parse cost) gates from it. Previously each gate was an independent figure, so a gate could be raised on its own to admit a change; now buying room means raising the one budget, which is a deliberate decision rather than a build fix. The raw-minified gate is also expressed as a maximum ratio to compressed size rather than a fixed byte count, so it detects the one thing it usefully can: the bundle growing faster uncompressed than compressed. Brotli was never gated before this, despite being the figure the README quoted.
-
-### Changed
 
 - **Web Vitals moved out of core into `@revu-ai/core/vitals`.** BREAKING for module consumers. Core's one job is behavioral capture, and page performance is a different question about the same page: a host can reasonably want every click and no vitals, or the reverse. In core it cost every visitor its bytes whether the host wanted it or not, which is what the plugin seam exists to prevent. Core is now 9.31 kB brotli (from 9.83), and the plugin is 0.83 kB that only an importer pays.
 
