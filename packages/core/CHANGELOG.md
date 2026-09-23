@@ -31,17 +31,22 @@ Give the server a second, independent source for the browser a visitor claims to
 
 - **The size budget is now one number instead of four.** `packages/core/.size-limit.js` declares a single brotli budget of 10 kB, which is what "cold-loads in single-digit kilobytes" means for a browser downloading the SDK from the CDN, and derives the gzip (fallback transfer) and raw-minified (parse cost) gates from it. Previously each gate was an independent figure, so a gate could be raised on its own to admit a change; now buying room means raising the one budget, which is a deliberate decision rather than a build fix. The raw-minified gate is also expressed as a maximum ratio to compressed size rather than a fixed byte count, so it detects the one thing it usefully can: the bundle growing faster uncompressed than compressed. Brotli was never gated before this, despite being the figure the README quoted.
 
+### Changed
+
+- **The durable queue is stored in chunks rather than as one blob.** `localStorage.setItem` rewrites whatever it is given in full, so appending one event to a long queue cost a serialization and a write of the *entire* queue, on the capture path, for every event. The queue is now mirrored as a series of 64-event chunks with a small index, so an append rewrites one chunk. Events at the cap are also dropped a block at a time rather than one at a time, because pruning a single event on every append would shift the front and dirty every chunk, undoing the point. The cap is still never exceeded and pruning is still oldest-first. A queue written by an earlier version is read in its old layout and rewritten in chunks on the next append, so an upgrade never loses a pending event.
+
 ### Performance
 
 Measured on the built bundle in Safari 27 and Firefox 155, seven interleaved rounds against the previous build, medians reported.
 
 - **Building an event's context costs 0.26 us (Safari) / 0.44 us (Firefox) per event**, up 0.02 us and 0.06 us respectively. The per-event copies of `ua_brands` and `languages` introduced in this release are the reason those numbers moved at all, and they are the smallest part of it.
+- **A full `capture()` call no longer gets slower as the queue grows.** On a queue holding 1000 rich events, an append cost about 2.5 ms before the chunked layout and about 0.1 ms after it, and the figure is now flat from an empty queue to a full one instead of rising with depth. This matters most in the case that produces a long queue in the first place: a session capturing steadily while the network is unavailable.
 - **A full `capture()` call costs 44 us (Safari) / 58 us (Firefox) per event**, up around 6 us and 4 us. That figure is dominated by the durable queue's synchronous storage write, not by building the event, so it scales with the serialized size of an event rather than with the work done to create one. An event grew by 49 bytes (Safari) / 56 bytes (Firefox), about 6 to 7 percent, and the added time tracks that growth.
 - **With the queue at its 1000-event cap**, the worst case, `capture()` costs 164 us (Safari) / 330 us (Firefox). This is the storage write scaling with a full queue and is unchanged in character from previous releases.
 
 ### Size
 
-- **Bundle size: 9.62 kB brotli on the wire / 10.7 kB gzipped / 34.82 kB minified.** The three context fields cost around 0.1 kB on the wire.
+- **Bundle size: 9.88 kB brotli on the wire / 10.97 kB gzipped / 35.97 kB minified.** The chunked queue accounts for around 0.27 kB of that and buys a 25x reduction in append cost at depth.
 
 ## [0.3.0] - 2026-09-05
 

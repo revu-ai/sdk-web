@@ -3,8 +3,8 @@
 [![npm](https://img.shields.io/npm/v/@revu-ai/core.svg)](https://www.npmjs.com/package/@revu-ai/core)
 [![ci](https://github.com/revu-ai/sdk-web/actions/workflows/ci.yml/badge.svg)](https://github.com/revu-ai/sdk-web/actions/workflows/ci.yml)
 [![license](https://img.shields.io/npm/l/@revu-ai/core.svg)](https://github.com/revu-ai/sdk-web/blob/main/LICENSE)
-[![wire](https://img.shields.io/badge/brotli-9.62%20kB-blue)](#size)
-[![gzip](https://img.shields.io/badge/gzip-10.7%20kB-blue)](#size)
+[![wire](https://img.shields.io/badge/brotli-9.88%20kB-blue)](#size)
+[![gzip](https://img.shields.io/badge/gzip-10.97%20kB-blue)](#size)
 
 The lean capture core of the REVU Web SDK. One line in your page
 captures pageviews, clicks, scroll depth, form submits, downloads,
@@ -25,7 +25,7 @@ revu.capture("checkout_completed", { plan: "pro" }); // optional explicit event
 revu.reset(); // on logout
 ```
 
-ESM only. **Zero runtime dependencies.** 9.62 kB brotli on the wire, 10.7 kB gzipped.
+ESM only. **Zero runtime dependencies.** 9.88 kB brotli on the wire, 10.97 kB gzipped.
 
 ## Documentation
 
@@ -122,7 +122,7 @@ The CDN sets long-cache headers on pinned URLs (the file at a given
 version never changes), and a short cache TTL on `latest` so a release
 propagates within minutes. Every response is pre-compressed at
 publish time, so a modern browser receives the bundle as brotli
-(9.62 kB on the wire for the current version).
+(9.88 kB on the wire for the current version).
 
 If you would rather self-host, copy
 `node_modules/@revu-ai/core/dist/index.js` into your own asset
@@ -198,9 +198,9 @@ captured on those engines simply omit `context.connection_type` and
 
 | Metric                     | Current  | Budget   |
 | -------------------------- | -------- | -------- |
-| Brotli on the wire         | 9.62 kB  | 10 kB    |
-| Gzipped (fallback path)    | 10.7 kB  | 11.5 kB  |
-| Minified (parse cost)      | 34.82 kB | 37.5 kB  |
+| Brotli on the wire         | 9.88 kB  | 10 kB    |
+| Gzipped (fallback path)    | 10.97 kB | 11.5 kB  |
+| Minified (parse cost)      | 35.97 kB | 37.5 kB  |
 
 All three are CI gates (`bun run size`), and all three derive from one
 number: the brotli budget. Brotli is what you actually download, because
