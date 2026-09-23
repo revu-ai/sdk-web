@@ -34,6 +34,16 @@ Give the server a second, independent source for the browser a visitor claims to
 
 ### Changed
 
+- **Web Vitals moved out of core into `@revu-ai/core/vitals`.** BREAKING for module consumers. Core's one job is behavioral capture, and page performance is a different question about the same page: a host can reasonably want every click and no vitals, or the reverse. In core it cost every visitor its bytes whether the host wanted it or not, which is what the plugin seam exists to prevent. Core is now 9.31 kB brotli (from 9.83), and the plugin is 0.83 kB that only an importer pays.
+
+  ```js
+  import revu from "@revu-ai/core";
+  import webVitals from "@revu-ai/core/vitals";
+
+  revu.init({ apiKey: "revu_pk_...", plugins: [webVitals()] });
+  ```
+
+  **The `<script>` install is unchanged and needs no action**: a tag consumer has no import to make and cannot tree-shake, so the CDN bundle registers the plugin itself and keeps reporting vitals exactly as before. The `captureWebVitals` option is gone, since installing the plugin or not is now the switch; passing it is simply ignored.
 - **The measurement boundary is written down.** `docs/concepts.md` gains "What the SDK measures, and what the server works out", stating the rule the SDK follows: it computes a value only when that value cannot be reconstructed from what it would otherwise send. Scroll depth, engagement time, idle and active durations, and Web Vitals are the entire list, each with the reason it is on it. Everything else, including user agent parsing, campaign attribution from a URL, geography, sessionization and bot classification, is worked out server-side from the events that arrive, so it can be corrected and re-run over history without anyone redeploying.
 - **The durable queue is stored in chunks rather than as one blob.** `localStorage.setItem` rewrites whatever it is given in full, so appending one event to a long queue cost a serialization and a write of the *entire* queue, on the capture path, for every event. The queue is now mirrored as a series of 64-event chunks with a small index, so an append rewrites one chunk. Events at the cap are also dropped a block at a time rather than one at a time, because pruning a single event on every append would shift the front and dirty every chunk, undoing the point. The cap is still never exceeded and pruning is still oldest-first. A queue written by an earlier version is read in its old layout and rewritten in chunks on the next append, so an upgrade never loses a pending event.
 
@@ -48,7 +58,7 @@ Measured on the built bundle in Safari 27 and Firefox 155, seven interleaved rou
 
 ### Size
 
-- **Bundle size: 9.83 kB brotli on the wire / 10.92 kB gzipped / 35.8 kB minified.** The chunked queue accounts for around 0.27 kB of that and buys a 25x reduction in append cost at depth.
+- **Bundle size: 9.31 kB brotli on the wire / 10.36 kB gzipped / 33.9 kB minified**, plus 0.83 kB brotli for the vitals plugin if you import it. The `<script>` bundle, which includes the plugin, is 9.9 kB brotli. The chunked queue accounts for around 0.27 kB of that and buys a 25x reduction in append cost at depth.
 
 ## [0.3.0] - 2026-09-05
 

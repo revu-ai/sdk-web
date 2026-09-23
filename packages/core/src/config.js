@@ -16,7 +16,6 @@ const DEFAULTS = {
   maxQueue: 1000,
   debug: false,
   onEvent: () => {},
-  captureWebVitals: true,
   captureAttention: true,
   idleTimeoutMs: 30000,
   sessionTimeoutMs: 30 * 60 * 1000,

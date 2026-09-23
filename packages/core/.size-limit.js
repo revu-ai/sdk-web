@@ -86,4 +86,25 @@ const gates = (name, path) => [
   },
 ];
 
-export default [...gates("core esm", "dist/index.js"), ...gates("core iife", "dist/iife/index.js")];
+/**
+ * A plugin's budget is a fraction of the core one. The point of the plugin
+ * seam is that opting in costs a little, not that it is unbounded: an
+ * unwatched artifact is how the brotli figure went unchecked before this file
+ * existed. A tenth of the wire budget is generous for a single capability and
+ * still trips long before one turns into a second SDK.
+ * @type {number}
+ */
+const PLUGIN_BUDGET_KB = WIRE_BUDGET_KB / 10;
+
+export default [
+  ...gates("core esm", "dist/index.js"),
+  ...gates("core iife", "dist/iife/index.js"),
+  {
+    name: "plugin: vitals (brotli, opt-in cost)",
+    path: "dist/plugins/vitals.js",
+    limit: kb(PLUGIN_BUDGET_KB),
+    brotli: true,
+    gzip: false,
+    disablePlugins: ["@size-limit/esbuild"],
+  },
+];

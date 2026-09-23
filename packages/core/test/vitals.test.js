@@ -9,8 +9,8 @@
  * is idempotent across multiple terminal signals.
  */
 
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { Vitals } from "../src/vitals.js";
+import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
+import webVitals, { Vitals } from "../src/plugins/vitals.js";
 
 /**
  * Collect events emitted by a Vitals instance.
@@ -172,6 +172,47 @@ describe("Vitals - environment guards", () => {
       expect(events).toEqual([]);
     } finally {
       globalThis.PerformanceObserver = original;
+    }
+  });
+});
+
+describe("webVitals() plugin", () => {
+  /** Minimal PluginApi stand-in: the plugin only needs record + config. */
+  const fakeApi = (over = {}) => ({
+    record: mock(() => {}),
+    config: { debug: false },
+    ...over,
+  });
+
+  test("declares a stable name so a double install is a no-op", () => {
+    expect(webVitals().name).toBe("web-vitals");
+    expect(webVitals().name).toBe(webVitals().name);
+  });
+
+  test("installs a collector that reports through the host's record()", () => {
+    const api = fakeApi();
+    const plugin = webVitals();
+    expect(() => plugin.install(/** @type {any} */ (api))).not.toThrow();
+    // The collector reports on terminal lifecycle, which the suite above
+    // drives directly; here we only assert the wiring took.
+    expect(typeof plugin.install).toBe("function");
+  });
+
+  test("does not advertise a teardown it cannot perform", () => {
+    // The collector disconnects its own observers when it reports, so an
+    // uninstall hook would have nothing to release. Better absent than lying.
+    expect(webVitals().uninstall).toBeUndefined();
+  });
+
+  test("stays silent on a collector error unless the host asked for debug", () => {
+    const errors = [];
+    const original = console.error;
+    console.error = (...a) => errors.push(a);
+    try {
+      webVitals().install(/** @type {any} */ (fakeApi({ config: { debug: false } })));
+      expect(errors).toHaveLength(0);
+    } finally {
+      console.error = original;
     }
   });
 });

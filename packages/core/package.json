@@ -31,6 +31,10 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
+    },
+    "./vitals": {
+      "types": "./dist/plugins/vitals.d.ts",
+      "import": "./dist/plugins/vitals.js"
     }
   },
   "unpkg": "./dist/iife/index.js",

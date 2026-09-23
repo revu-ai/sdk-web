@@ -19,7 +19,12 @@
  *      a separate entry whose only export is a side effect lets us put
  *      the singleton itself at `window.revu`.
  *
- *   2. It drains the fire-before-load stub queue documented in
+ *   2. It registers the Web Vitals plugin, which core no longer wires. A
+ *      module consumer opts in by importing `@revu-ai/core/vitals`; a
+ *      `<script>` consumer has no import to make, so the bundle makes the
+ *      same choice on their behalf and the CDN install is unchanged.
+ *
+ *   3. It drains the fire-before-load stub queue documented in
  *      `docs/install.md` against the real singleton. The drain logic is
  *      implemented in `./iife-boot.js` so this module can stay
  *      export-free, which keeps the Rollup IIFE wrapper at its minimal
@@ -29,6 +34,14 @@
 
 import revu from "./index.js";
 import { bootIife } from "./iife-boot.js";
+import webVitals from "./plugins/vitals.js";
+
+// Web Vitals is a plugin, so an ESM consumer who never imports it ships none
+// of its bytes. A `<script>` tag has no such choice to make: there is one
+// artifact and the host cannot tree-shake it, so the CDN build registers the
+// plugin itself and a one-line install keeps reporting vitals exactly as
+// before. Registered before boot so it is queued and installed by `init()`.
+revu.use(webVitals());
 
 // Entry-point side effect. Runs once when this bundle is evaluated.
 bootIife(revu, /** @type {Record<string, unknown>} */ (globalThis).revu);

@@ -327,8 +327,9 @@ analysis:
   input activity that would otherwise never be sent; reporting every
   mouse move so the server could derive them is exactly the trade this
   rule exists to avoid.
-- **Web Vitals** (LCP, INP, CLS). Defined by the browser's own
-  performance timeline. There is no raw form of them to send.
+- **Web Vitals** (LCP, INP, CLS), when the vitals plugin is installed.
+  Defined by the browser's own performance timeline. There is no raw
+  form of them to send.
 
 Everything else is left alone, on purpose:
 
@@ -389,4 +390,4 @@ envelope above; the rows below describe what's distinctive about each.
 
 | Event | Fires when | Notable properties |
 |---|---|---|
-| `$web_vital` | LCP / INP / CLS report on page hide | `name`, `value`, `unit` (`"ms"` or `"score"`) |
+| `$web_vital` | LCP / INP / CLS report on page hide. Requires the [vitals plugin](./plugins.md#revu-aicorevitals---web-vitals), which the `<script>` install bundles | `name`, `value`, `unit` (`"ms"` or `"score"`) |

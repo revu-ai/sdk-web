@@ -1,29 +1,29 @@
 /**
- * @file Web Vitals - LCP, INP, CLS as `$web_vital` events on page hide.
+ * @file `@revu-ai/core/vitals` - Web Vitals as an opt-in plugin.
  *
- * Pure PerformanceObserver implementation; no runtime dependency on the
- * web-vitals package or anything else. CLS uses the spec's session-window
- * model (the largest burst of layout shifts, not the lifetime sum) so the
- * reported value is canonical CLS rather than an inflated total that grows
- * unboundedly on long-lived / SPA pages. INP is reported as the worst
- * interaction latency observed, which is the spec's definition below ~50
- * interactions (the common case for a single page load); aggregating to a
- * high percentile across many page loads stays a server-side concern.
+ * LCP, INP and CLS, reported once on terminal page lifecycle. Pure
+ * `PerformanceObserver`; no runtime dependency, no polling, no work on the
+ * critical path.
  *
- * Reporting model: collect across the page's lifetime, emit each metric
- * once on terminal lifecycle (pagehide, or visibility-hidden as a mobile
- * preempt where pagehide can be unreliable). SPA route changes do NOT
- * trigger emission - Web Vitals are still page-load metrics by spec,
- * and Google's own web-vitals library treats soft-navigation vitals as
- * experimental.
+ * This lives outside core deliberately. Core's one job is behavioral capture,
+ * and page performance is a different question about the same page: a
+ * customer can want every click and no vitals, or the reverse. Shipping it in
+ * core meant every visitor downloaded and parsed it whether the host wanted
+ * it or not, which is exactly what the plugin seam exists to prevent. Import
+ * it and the bytes are there; leave it out and tree-shaking removes them.
  *
- * Privacy: every value is a number with no identifying content. Vitals
- * stay in core (no opt-in package needed) because there is no PII to
- * minimize - the only knob worth exposing is "off entirely", via
- * `captureWebVitals: false`.
+ * ```js
+ * import revu from "@revu-ai/core";
+ * import webVitals from "@revu-ai/core/vitals";
+ *
+ * revu.init({ apiKey: "revu_pk_...", plugins: [webVitals()] });
+ * ```
+ *
+ * The `<script>` install from the CDN bundles this already, so a one-line
+ * install keeps reporting vitals with no change.
  */
 
-import { safe } from "./utils.js";
+import { safe } from "../utils.js";
 
 /**
  * @callback EmitFn
@@ -203,4 +203,28 @@ export class Vitals {
 function round(n, decimals) {
   const factor = Math.pow(10, decimals);
   return Math.round(n * factor) / factor;
+}
+
+/**
+ * Build the Web Vitals plugin.
+ *
+ * Registers a single {@link Vitals} collector that reports LCP, INP and CLS
+ * once, on whichever terminal signal the browser delivers first.
+ *
+ * @returns {import("../types.js").RevuPlugin}
+ */
+export default function webVitals() {
+  return {
+    name: "web-vitals",
+    install(api) {
+      // No `uninstall`: the collector reports once and disconnects its own
+      // observers at that point, so there is nothing a teardown hook could
+      // release that the report does not already release itself.
+      new Vitals(api.record, (err) => {
+        // Plugins get no error channel of their own; honor the host's debug
+        // flag the way the rest of the SDK does, and stay silent otherwise.
+        if (api.config.debug) console.error("[REVU] web-vitals", err);
+      }).start();
+    },
+  };
 }

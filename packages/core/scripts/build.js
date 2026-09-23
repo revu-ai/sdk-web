@@ -71,6 +71,16 @@ await buildOne("esm", {
   ...common,
 });
 
+// The Web Vitals plugin is a separate entry so `@revu-ai/core/vitals`
+// resolves to its own file. Building it apart from the core entry is what
+// makes the bytes opt-in: a consumer who never imports it never loads it.
+await buildOne("vitals plugin", {
+  entrypoints: ["src/plugins/vitals.js"],
+  outdir: "dist/plugins",
+  format: "esm",
+  ...common,
+});
+
 await buildOne("iife", {
   entrypoints: ["src/iife.js"],
   outdir: "dist/iife",

@@ -6,6 +6,30 @@ A plugin extends the SDK with new event types or behaviors without
 bloating the core. Every plugin implements the same minimal contract,
 regardless of how it is distributed.
 
+## Plugins that ship with the package
+
+### `@revu-ai/core/vitals` - Web Vitals
+
+Reports Largest Contentful Paint, Interaction to Next Paint and
+Cumulative Layout Shift as `$web_vital` events, once, on terminal page
+lifecycle. Pure `PerformanceObserver`: no polling, no runtime
+dependency, and no work on the critical path.
+
+```js
+import revu from "@revu-ai/core";
+import webVitals from "@revu-ai/core/vitals";
+
+revu.init({ apiKey: "revu_pk_...", plugins: [webVitals()] });
+```
+
+It costs under 1 kB brotli on top of core, and nothing at all if you do
+not import it.
+
+**The `<script>` install already includes it.** A tag consumer has no
+import to make and cannot tree-shake, so the CDN bundle registers the
+plugin itself. If you install from `cdn.revu.ai`, vitals are reported
+with no change on your side.
+
 ## The contract
 
 ```js
@@ -58,8 +82,8 @@ wiring path does not cause double listeners.
 ## When to ship a feature as a plugin vs put it in core
 
 Core stays universal. Anything every customer uses regardless of segment
-or use case (autocapture, identity, transport, attention, web vitals)
-lives in core. Anything **segment-specific** (B2B-only signals,
+or use case (autocapture, identity, transport, attention) lives in
+core. Anything **segment-specific** (B2B-only signals,
 framework adapters, industry compliance, paid-plan capabilities) ships
 as a plugin so customers who do not use it carry **zero bytes** after
 tree-shaking.

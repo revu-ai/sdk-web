@@ -13,7 +13,6 @@ import { Identity } from "./identity.js";
 import { createStorage } from "./storage.js";
 import { Transport } from "./transport.js";
 import { VERSION } from "./version.js";
-import { Vitals } from "./vitals.js";
 import { hashUint32, nowIso, readGpc, routePath, sanitizeProperties, uuid } from "./utils.js";
 
 /**
@@ -96,7 +95,6 @@ export class RevuClient {
       denySelectors: config.autocaptureDenySelectors,
       allowSelectors: config.autocaptureAllowSelectors,
     });
-    this.vitals = new Vitals(emit, reportError);
     /** @type {number} */
     this.sequence = 0;
     /** @type {string|null} Session id the cached sampling decision was made for. */
@@ -117,20 +115,20 @@ export class RevuClient {
     this._identifyHintShown = false;
   }
 
-  /** Start transport + attention + autocapture + vitals + any registered plugins. */
+  /** Start transport + attention + autocapture + any registered plugins. */
   start() {
     this.transport.start();
     // Attention starts before capture so the engagement clock is already
     // ticking when the initial $pageview fires.
     this.attention.start();
     if (this.config.autocapture) this.autocapture.start();
-    if (this.config.captureWebVitals !== false) this.vitals.start();
     for (const plugin of this._plugins) {
       if (!this._installed.has(plugin.name)) this._installPlugin(plugin);
     }
     // Install the terminal pagehide flush LAST so it runs after every
     // emit-on-pagehide listener registered above (autocapture's
-    // `$page_leave`, vitals' CLS / INP report, any plugin doing the same).
+    // `$page_leave`, the vitals plugin's CLS / INP report, any plugin doing
+    // the same).
     // pagehide listeners on the same target fire in registration order, so
     // installing this one last guarantees the transport sees those final
     // events in the queue before it flushes.
