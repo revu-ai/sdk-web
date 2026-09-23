@@ -2,9 +2,10 @@
 
 [Docs index](./index.md) - [package README](../README.md)
 
-The mental model behind the SDK. Four ideas cover almost everything you
-will run into: identity, sessions, the canonical event shape, and the
-"interactions, never values" rule.
+The mental model behind the SDK. Five ideas cover almost everything you
+will run into: identity, sessions, the canonical event shape, the
+"interactions, never values" rule, and where measurement stops and
+analysis begins.
 
 ## Contents
 
@@ -12,6 +13,7 @@ will run into: identity, sessions, the canonical event shape, and the
 - [Sessions: engagement, not page visits](#sessions-engagement-not-page-visits)
 - [The canonical event shape](#the-canonical-event-shape)
 - [Interactions, never values](#interactions-never-values)
+- [What the SDK measures, and what the server works out](#what-the-sdk-measures-and-what-the-server-works-out)
 
 ## `anonymous_id` vs `user_id`
 
@@ -289,6 +291,62 @@ The SDK records what happened, not what was entered:
 This is not a tuning knob. It is the invariant the SDK exists to
 enforce. Full details (including how to opt arbitrary regions out with
 `data-revu-mask`) are in [privacy.md](./privacy.md).
+
+## What the SDK measures, and what the server works out
+
+The SDK reports. It does not analyze. Every metric you will read on a
+dashboard, and every judgement about what a visitor did or who they
+are, is worked out server-side from the events that arrive. That is
+deliberate, and it is the reason the SDK stays small: analysis changes
+far more often than measurement does, and a rule that lives on the
+server can be corrected, re-run over history, and improved without a
+single customer redeploying anything.
+
+So the dividing line is not "simple work here, hard work there". It is:
+
+> **The SDK computes a value only when the value cannot be reconstructed
+> from what it would otherwise send.**
+
+Almost everything falls on the reporting side of that line. A few
+things do not, and they are worth naming because they look like
+analysis:
+
+- **Scroll depth** (`depth_percent`, `max_scroll_percent`). Depth is a
+  ratio between scroll position, viewport height, and document height.
+  Document height changes as images load, content expands, and a
+  single-page app swaps a route. Reconstructing depth server-side would
+  mean streaming all three numbers on every scroll frame, which is a
+  large multiple of the data and would put the SDK on the critical path
+  of a scroll. The ratio is computed where those numbers exist, and the
+  SDK reports the result.
+- **Engagement time** (`engagement_time_ms` on `$page_leave`). Visible
+  time on a page, excluding time the tab was hidden. It is a sum over
+  visibility transitions that only the page can observe, and a page can
+  end without any terminal event reaching the server at all.
+- **Idle and active durations** (`$idle`, `$active`). Derived from
+  input activity that would otherwise never be sent; reporting every
+  mouse move so the server could derive them is exactly the trade this
+  rule exists to avoid.
+- **Web Vitals** (LCP, INP, CLS). Defined by the browser's own
+  performance timeline. There is no raw form of them to send.
+
+Everything else is left alone, on purpose:
+
+- **User agent parsing** into os, browser and device. The SDK sends the
+  raw string.
+- **Campaign attribution** from a URL's query. The SDK sends the URL;
+  the server derives UTM and click ids. (It does persist *which*
+  landing was first and last across sessions, because that memory lives
+  in the visitor's browser and nowhere else.)
+- **Geography.** The SDK never reads location. The server derives it
+  from the request.
+- **Sessionization, funnels, retention, segmentation, bot
+  classification.** All server-side, all re-runnable over history.
+
+The practical test when adding a field: *could the server work this out
+from what is already on the wire?* If yes, send the input and let it.
+If no, and the alternative is shipping far more data or doing work on a
+hot path, compute it and say so here.
 
 ## Event catalog
 

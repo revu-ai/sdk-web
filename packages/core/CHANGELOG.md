@@ -34,6 +34,7 @@ Give the server a second, independent source for the browser a visitor claims to
 
 ### Changed
 
+- **The measurement boundary is written down.** `docs/concepts.md` gains "What the SDK measures, and what the server works out", stating the rule the SDK follows: it computes a value only when that value cannot be reconstructed from what it would otherwise send. Scroll depth, engagement time, idle and active durations, and Web Vitals are the entire list, each with the reason it is on it. Everything else, including user agent parsing, campaign attribution from a URL, geography, sessionization and bot classification, is worked out server-side from the events that arrive, so it can be corrected and re-run over history without anyone redeploying.
 - **The durable queue is stored in chunks rather than as one blob.** `localStorage.setItem` rewrites whatever it is given in full, so appending one event to a long queue cost a serialization and a write of the *entire* queue, on the capture path, for every event. The queue is now mirrored as a series of 64-event chunks with a small index, so an append rewrites one chunk. Events at the cap are also dropped a block at a time rather than one at a time, because pruning a single event on every append would shift the front and dirty every chunk, undoing the point. The cap is still never exceeded and pruning is still oldest-first. A queue written by an earlier version is read in its old layout and rewritten in chunks on the next append, so an upgrade never loses a pending event.
 
 ### Performance

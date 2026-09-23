@@ -9,6 +9,17 @@
  *
  * Every public method is wrapped with `safe()` so the SDK can **never throw
  * into the host page** - the cardinal invariant of a defensive analytics SDK.
+ *
+ * The other invariant worth stating at the entry point is what this package
+ * is NOT. It reports; it does not analyze. Metrics, sessionization, funnels,
+ * user agent parsing, geography and bot classification are all worked out
+ * server-side from the events that arrive here, so they can be corrected and
+ * re-run over history without a customer redeploying anything. The SDK
+ * computes a value only when that value cannot be reconstructed from what it
+ * would otherwise send: scroll depth, engagement time, idle and active
+ * durations, and Web Vitals are the whole list, and each is explained in
+ * `docs/concepts.md` under "What the SDK measures, and what the server works
+ * out". Adding to that list is a deliberate decision, not a convenience.
  */
 
 import { RevuClient } from "./client.js";
