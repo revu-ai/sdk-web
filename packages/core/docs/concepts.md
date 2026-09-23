@@ -188,7 +188,7 @@ shape:
     "viewport_width": 1440,
     "viewport_height": 900,
     "environment": "production",
-    "sdk_version": "0.2.0",
+    "sdk_version": "0.4.0",
     "consent": { "analytics": "granted", "marketing": "granted", "functional": "granted" }
   },
   "properties": {

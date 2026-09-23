@@ -61,7 +61,7 @@ Or load it directly from `cdn.revu.ai` (no build step required, see
 the [script tag quickstart](#plain-html-script-tag-no-bundler)):
 
 ```html
-<script async src="https://cdn.revu.ai/behavior/0.2.0"></script>
+<script async src="https://cdn.revu.ai/behavior/0.4.0"></script>
 <script>
   window.revu = window.revu || new Proxy({q:[]}, {
     get: (t, m) => m in t ? t[m] : (...a) => t.q.push([m, ...a]),
@@ -109,7 +109,7 @@ not change the bytes your page loads without warning (only the `src`
 changes):
 
 ```html
-<script async src="https://cdn.revu.ai/behavior/0.2.0"></script>
+<script async src="https://cdn.revu.ai/behavior/0.4.0"></script>
 <script>
   window.revu = window.revu || new Proxy({q:[]}, {
     get: (t, m) => m in t ? t[m] : (...a) => t.q.push([m, ...a]),
@@ -200,7 +200,7 @@ captured on those engines simply omit `context.connection_type` and
 | -------------------------- | -------- | -------- |
 | Brotli on the wire         | 9.35 kB  | 10 kB    |
 | Gzipped (fallback path)    | 10.41 kB | 11.5 kB  |
-| Minified (parse cost)      | 34.02 kB | 37.5 kB  |
+| Minified (parse cost)      | 34.01 kB | 37.5 kB  |
 
 All three are CI gates (`bun run size`), and all three derive from one
 number: the brotli budget. Brotli is what you actually download, because

@@ -307,7 +307,7 @@ See [plugins.md](./plugins.md) for the plugin contract.
 
 ## `revu.version`
 
-The build string of the bundle (for example `"0.2.0"`). The same string
+The build string of the bundle (for example `"0.4.0"`). The same string
 ships on every event as `context.sdk_version`, and it is useful for
 support tickets (paste it in) and console introspection.
 
