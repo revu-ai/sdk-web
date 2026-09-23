@@ -36,6 +36,20 @@ const MAX_KEEPALIVE_BYTES = 48 * 1024;
 const BACKOFF_BASE_MS = 1000;
 const BACKOFF_MAX_MS = 60000;
 
+/**
+ * Buffers events durably and gets them to the ingest endpoint.
+ *
+ * Two guarantees shape everything below. An event that has been captured is
+ * never dropped because a send failed: it stays in the {@link PersistentQueue}
+ * until a request is CONFIRMED, so a failure, an offline period, or a page
+ * that goes away mid-send all end in a retry rather than a loss. And a batch
+ * is removed by identity rather than by position, so a confirmation arriving
+ * late cannot remove events it did not deliver.
+ *
+ * The cost of that is an occasional duplicate delivery, which the ingest
+ * endpoint absorbs by treating the client-generated `event_id` as an
+ * idempotency key. Losing an event is permanent; sending one twice is not.
+ */
 export class Transport {
   /** @param {TransportOptions} options */
   constructor(options) {
@@ -56,10 +70,8 @@ export class Transport {
     this.failures = 0;
     /** Epoch ms before which we should not attempt a network flush. */
     this.backoffUntil = 0;
-    // Provisional ingest path. Namespaced under a future `modules/behavior/`
-    // (REVU mounts modules under the `/v1` group), kept distinct from the
-    // existing scraping `ingestion` routes. Finalize this when the server route
-    // is built; the production edge may also front it with an `/api` prefix.
+    // The behavior ingest path. `host` is normalized without a trailing slash
+    // so a configured host with or without one resolves to the same endpoint.
     this.endpoint = `${options.host.replace(/\/$/, "")}/v1/behavior/events`;
   }
 

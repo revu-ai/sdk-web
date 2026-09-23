@@ -23,6 +23,21 @@ import { hashUint32, nowIso, readGpc, routePath, sanitizeProperties, uuid } from
  */
 const SAMPLING_EXEMPT = new Set(["$identify", "$reset", "$alias"]);
 
+/**
+ * The SDK's engine. Owns one page's worth of capture: it wires the capture
+ * layers to the identity, consent, attribution and context they need, stamps
+ * each event into the canonical shape, and hands it to the transport.
+ *
+ * Nothing here is public API. {@link import("./index.js")} wraps this class
+ * and is the only surface a host touches, so a change in here is free as long
+ * as that wrapper's behavior holds. The split exists so the public entry can
+ * guarantee it never throws (every method there is `safe()`-wrapped) without
+ * that concern leaking into the engine.
+ *
+ * One instance per `init()`. A second `init()` is ignored by the wrapper
+ * rather than constructing another, so the listeners this wires are installed
+ * exactly once per page.
+ */
 export class RevuClient {
   /** @param {import("./types.js").ResolvedConfig} config */
   constructor(config) {
