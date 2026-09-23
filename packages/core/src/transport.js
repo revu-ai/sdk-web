@@ -11,6 +11,17 @@
 import { PersistentQueue } from "./queue.js";
 
 /**
+ * Largest request body, in bytes, that may be sent with `keepalive`. Browsers
+ * allow roughly 64 KiB of in-flight keepalive body per origin, shared across
+ * every such request in flight, and reject anything beyond it. Measured: 64
+ * KiB is accepted and 65 KiB is rejected, and requests fired back to back fail
+ * well below that while the earlier one still holds quota. The value below
+ * leaves room for one concurrent request rather than sitting on the ceiling.
+ * @type {number}
+ */
+const MAX_KEEPALIVE_BYTES = 48 * 1024;
+
+/**
  * @typedef {object} TransportOptions
  * @property {string} host
  * @property {string} apiKey
@@ -180,6 +191,29 @@ export class Transport {
       }
     }
 
+    // Keep the request inside the `keepalive` quota. A browser allows about
+    // 64 KiB of in-flight keepalive body PER ORIGIN, shared by every such
+    // request, and rejects anything over it outright. `maxBatch` bounds a
+    // batch by event COUNT, which says nothing about its serialized size: 50
+    // events carrying rich properties clear 64 KiB easily, and because both
+    // paths set `keepalive` such a batch would be rejected on every attempt
+    // forever, wedging the queue behind it. Halve until it fits, leaving the
+    // remainder for the next flush. Measured boundary: 64 KiB is accepted and
+    // 65 KiB is rejected, so the limit below keeps headroom for a concurrent
+    // in-flight request sharing the same quota.
+    while (body.length > MAX_KEEPALIVE_BYTES && batch.length > 1) {
+      batch = batch.slice(0, Math.floor(batch.length / 2));
+      const smaller = serializeBatch(this.options.apiKey, batch);
+      if (smaller === null) break;
+      body = smaller;
+    }
+    // A SINGLE event over the quota cannot be split. Rather than drop it, the
+    // normal path sends it without `keepalive`, which has no such limit and is
+    // safe while the page is alive. The terminal path cannot do that (the
+    // request would not outlive the page), so it leaves the event queued for
+    // the next page load rather than firing a request certain to be rejected.
+    const withinKeepaliveQuota = body.length <= MAX_KEEPALIVE_BYTES;
+
     if (isUnload) {
       // Terminal flush. Two rules here, and both exist because a page that is
       // going away cannot confirm anything.
@@ -208,6 +242,7 @@ export class Transport {
       // the second signal would otherwise peek and re-send the same batch.
       // Skipping while one is in flight keeps a terminal close to one request.
       if (this.terminalSending) return false;
+      if (!withinKeepaliveQuota) return false;
 
       if (typeof fetch === "function") {
         this.terminalSending = true;
@@ -242,7 +277,7 @@ export class Transport {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body,
-        keepalive: true,
+        keepalive: withinKeepaliveQuota,
       });
       if (res.ok) {
         // By identity, not by position. A terminal flush can confirm and

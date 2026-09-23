@@ -412,6 +412,120 @@ describe("Transport", () => {
     expect(t.queue.peek(10)).toEqual([later]);
   });
 
+  test("splits a batch that would exceed the keepalive quota, and keeps the rest", async () => {
+    // maxBatch bounds a batch by event count, which says nothing about its
+    // serialized size. A browser rejects a keepalive body over roughly 64 KiB
+    // outright, so without a size bound the batch would be refused on every
+    // attempt and wedge the queue behind it.
+    const fetchMock = mockFetch(() => Promise.resolve(new Response("", { status: 200 })));
+    const { t } = makeTransport({ maxBatch: 16 });
+    // 16 events of ~8 KB each is ~128 KB, well over the quota.
+    for (let i = 1; i <= 16; i++) {
+      const e = makeEvent(i);
+      e.properties = { blob: "x".repeat(8 * 1024) };
+      t.enqueue(e);
+    }
+
+    await t.flush();
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const sent = fetchMock.mock.calls[0][1];
+    expect(sent.body.length).toBeLessThanOrEqual(48 * 1024);
+    expect(sent.keepalive).toBe(true);
+    // The events that did not fit are still queued, not dropped.
+    expect(t.queue.size()).toBeGreaterThan(0);
+    expect(JSON.parse(sent.body).batch.length).toBeLessThan(16);
+  });
+
+  test("drains an oversized queue across flushes instead of wedging on it", async () => {
+    const fetchMock = mockFetch(() => Promise.resolve(new Response("", { status: 200 })));
+    const { t } = makeTransport({ maxBatch: 16 });
+    for (let i = 1; i <= 16; i++) {
+      const e = makeEvent(i);
+      e.properties = { blob: "x".repeat(8 * 1024) };
+      t.enqueue(e);
+    }
+
+    for (let i = 0; i < 12 && t.queue.size() > 0; i++) await t.flush();
+
+    expect(t.queue.size()).toBe(0);
+    expect(fetchMock.mock.calls.length).toBeGreaterThan(1);
+  });
+
+  test("a single event over the quota goes out without keepalive rather than never", async () => {
+    // It cannot be split. The page is alive on the normal path, so the request
+    // does not need to outlive it and the quota does not apply.
+    const fetchMock = mockFetch(() => Promise.resolve(new Response("", { status: 200 })));
+    const { t } = makeTransport();
+    const huge = makeEvent(1);
+    huge.properties = { blob: "x".repeat(80 * 1024) };
+    t.enqueue(huge);
+
+    await t.flush();
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock.mock.calls[0][1].keepalive).toBe(false);
+    expect(t.queue.size()).toBe(0);
+  });
+
+  test("the terminal path leaves an unsplittable oversized event queued", async () => {
+    // A keepalive request is the only kind that outlives the page, so an event
+    // that cannot use one waits for the next page load rather than firing a
+    // request certain to be rejected.
+    const fetchMock = mockFetch(() => Promise.resolve(new Response("", { status: 200 })));
+    const { t } = makeTransport();
+    const huge = makeEvent(1);
+    huge.properties = { blob: "x".repeat(80 * 1024) };
+    t.enqueue(huge);
+
+    const ok = await t.flush(true);
+
+    expect(ok).toBe(false);
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(t.queue.size()).toBe(1);
+  });
+
+  test("survives repeated hide and show cycles without stranding events", async () => {
+    // Mobile backgrounding can fire the hide signal many times in a session.
+    // The in-flight guard must clear each time, or every cycle after the first
+    // would be a no-op and the queue would grow unbounded.
+    const fetchMock = mockFetch(() => Promise.resolve(new Response("", { status: 200 })));
+    const { t } = makeTransport();
+
+    for (let cycle = 1; cycle <= 10; cycle++) {
+      t.enqueue(makeEvent(cycle));
+      await t.flush(true);
+      await waitUntil(() => t.queue.size() === 0);
+      // The guard clears a microtask after the batch is removed, so wait for
+      // it rather than assuming the two land together.
+      await waitUntil(() => t.terminalSending === false);
+    }
+
+    expect(fetchMock).toHaveBeenCalledTimes(10);
+    expect(t.queue.size()).toBe(0);
+  });
+
+  test("a failed terminal send does not strand the guard for later cycles", async () => {
+    let fail = true;
+    const fetchMock = mockFetch(() =>
+      fail ? Promise.reject(new Error("offline")) : Promise.resolve(new Response("", { status: 200 })),
+    );
+    const { t } = makeTransport();
+    t.enqueue(makeEvent(1));
+
+    await t.flush(true);
+    await waitUntil(() => t.terminalSending === false);
+    expect(t.queue.size()).toBe(1);
+
+    // Connectivity returns and the page hides again.
+    fail = false;
+    t.enqueue(makeEvent(2));
+    await t.flush(true);
+    await waitUntil(() => t.queue.size() === 0);
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
   test("maxBatch caps the events sent per request and leaves the remainder queued", async () => {
     const fetchMock = mockFetch(() => Promise.resolve(new Response("", { status: 200 })));
     const { t } = makeTransport({ maxBatch: 2 });
