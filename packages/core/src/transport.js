@@ -127,8 +127,21 @@ export class Transport {
    * it after the page hides; if the OS kills the process before completion
    * (rare), the events remain durably queued and ship on next open. When
    * both `pagehide` and `visibilitychange -> hidden` fire (desktop close),
-   * the second invocation finds an empty queue and short-circuits via the
-   * size check in `flush()`, so no duplicate delivery.
+   * a send already in flight suppresses the second one, so the SDK does
+   * not issue the same request twice itself.
+   *
+   * That is not a guarantee of single delivery, and nothing here should be
+   * written as though it were. Measured in Chromium, Safari and Firefox, a
+   * terminal batch commonly does reach the endpoint twice: an engine may
+   * replay an in-flight `keepalive` request when it tears the renderer
+   * down (the SDK calls `fetch` once and the server logs two requests),
+   * and where events are emitted BETWEEN the two terminal signals the
+   * second flush is legitimate, carrying those new events plus the earlier
+   * ones whose 2xx has not arrived yet. Removing that overlap would mean
+   * dropping events before their delivery is confirmed, which is exactly
+   * the data loss the confirmed-commit rule above exists to prevent, so
+   * the duplicate is the deliberate side of the trade. Ingest is
+   * idempotent on `event_id`.
    */
   installPageHideFlush() {
     if (typeof addEventListener !== "function") return;
