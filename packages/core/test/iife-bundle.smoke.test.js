@@ -52,6 +52,26 @@ describe.skipIf(!bundleAvailable)(
      */
     beforeEach(() => {
       /** @type {Record<string, unknown>} */ (globalThis).revu = undefined;
+      // Hermetic PERSISTED state, for the same reason the network is stubbed
+      // below. Every test file in this suite shares one process, so one
+      // happy-dom `localStorage` and one cookie jar serve all of them, and
+      // the clients this file builds are real ones reading real storage. A
+      // consent record left behind by an earlier file is read back here as a
+      // visitor who opted out, and `record()` then suppresses every event
+      // before it is built: `init()` looks like it succeeded, no `$pageview`
+      // arrives, and `capture()` returns nothing. That failure is invisible
+      // from inside the test, because the SDK swallows it by design.
+      // Clearing both stores makes this file independent of the order the
+      // runner happens to pick, which is not guaranteed to be stable.
+      try {
+        localStorage.clear();
+      } catch {
+        // A store that refuses to clear is not a reason to fail the suite.
+      }
+      for (const pair of document.cookie.split(";")) {
+        const name = pair.split("=")[0].trim();
+        if (name) document.cookie = `${name}=; max-age=0; path=/`;
+      }
       // Belt-and-suspenders hermetic network. `evalBundle` injects `fetch` as
       // a parameter so a bundle that calls bare `fetch(...)` binds to the
       // no-op, but a different minifier (e.g. a newer Bun on CI) may emit
