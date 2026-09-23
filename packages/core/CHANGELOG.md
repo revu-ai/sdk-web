@@ -14,10 +14,6 @@ Give the server a second, independent source for the browser a visitor claims to
 - **`context.languages`.** The browser's ordered language list (the plural `navigator.languages`, alongside the existing singular `context.language`). An empty list is stamped rather than omitted, because an empty list is itself the signal. Low entropy: the same information already rides every request as `Accept-Language`.
 - **`context.navigation_type`.** The Navigation Timing entry type for this page load (`navigate`, `reload`, `back_forward`, or `prerender`), so a genuine landing can be told apart from a reload or a back-forward. Both attribution models key off the visitor's first `$pageview` and could not previously distinguish the three.
 
-### Size
-
-- **Bundle size: 9.5 kB brotli on the wire / 10.56 kB gzipped / 34.38 kB minified.** The three fields cost around 0.1 kB on the wire.
-
 ### Fixed
 
 - **Array-valued context fields are no longer shared between events.** `context.ua_brands` and `context.languages` are `FrozenArray` values owned by the browser engine. They are now copied when read and copied again per event, so a `beforeSend` hook that adjusts one event's list cannot leak that edit into every later event on the page, and the engine's own arrays are never handed out. Every other context value is a primitive and was never affected.
@@ -26,6 +22,18 @@ Give the server a second, independent source for the browser a visitor claims to
 ### Changed
 
 - **The size budget is now one number instead of four.** `packages/core/.size-limit.js` declares a single brotli budget of 10 kB, which is what "cold-loads in single-digit kilobytes" means for a browser downloading the SDK from the CDN, and derives the gzip (fallback transfer) and raw-minified (parse cost) gates from it. Previously each gate was an independent figure, so a gate could be raised on its own to admit a change; now buying room means raising the one budget, which is a deliberate decision rather than a build fix. The raw-minified gate is also expressed as a maximum ratio to compressed size rather than a fixed byte count, so it detects the one thing it usefully can: the bundle growing faster uncompressed than compressed. Brotli was never gated before this, despite being the figure the README quoted.
+
+### Performance
+
+Measured on the built bundle in Safari 27 and Firefox 155, seven interleaved rounds against the previous build, medians reported.
+
+- **Building an event's context costs 0.26 us (Safari) / 0.44 us (Firefox) per event**, up 0.02 us and 0.06 us respectively. The per-event copies of `ua_brands` and `languages` introduced in this release are the reason those numbers moved at all, and they are the smallest part of it.
+- **A full `capture()` call costs 44 us (Safari) / 58 us (Firefox) per event**, up around 6 us and 4 us. That figure is dominated by the durable queue's synchronous storage write, not by building the event, so it scales with the serialized size of an event rather than with the work done to create one. An event grew by 49 bytes (Safari) / 56 bytes (Firefox), about 6 to 7 percent, and the added time tracks that growth.
+- **With the queue at its 1000-event cap**, the worst case, `capture()` costs 164 us (Safari) / 330 us (Firefox). This is the storage write scaling with a full queue and is unchanged in character from previous releases.
+
+### Size
+
+- **Bundle size: 9.5 kB brotli on the wire / 10.56 kB gzipped / 34.38 kB minified.** The three fields cost around 0.1 kB on the wire.
 
 ## [0.3.0] - 2026-09-05
 
