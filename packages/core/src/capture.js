@@ -16,6 +16,7 @@
 
 import { fingerprint, closestMask } from "./fingerprint.js";
 import { routePath, safe, scrubUrl } from "./utils.js";
+import { classifyLink } from "./capture/link-classifier.js";
 
 // ---------------------------------------------------------------------------
 // Tuning constants. Conservative defaults; not exposed in config yet because
@@ -30,13 +31,6 @@ const RAGE_CLICK_THRESHOLD = 3;
 const RAGE_CLICK_WINDOW_MS = 1000;
 /** How long after a resize stops we emit one $resize with the final size. */
 const RESIZE_DEBOUNCE_MS = 500;
-/**
- * Pathname extensions classified as file downloads. Allowlist over a
- * denylist: HTML / JS / CSS / SVG and other "navigation" extensions stay
- * routed as normal clicks. The `download` attribute always takes precedence.
- */
-const DOWNLOAD_EXTENSIONS = /\.(pdf|csv|tsv|xlsx?|docx?|pptx?|zip|tar|gz|7z|rar|json|xml|txt|mp[34]|mov|avi|webm|webp|psd|ai|sketch|fig|exe|dmg|pkg|deb|apk|ipa|dll|iso)(\?.*)?$/i;
-
 /**
  * @callback EmitFn
  * @param {string} eventType
@@ -328,57 +322,14 @@ export class Capture {
   }
 
   /**
-   * If the clicked element resolves to a real anchor, classify it as a file
-   * download (download attribute or known file extension) or an outbound link
-   * (hostname differs from the current location). Anchors are walked up the
-   * tree so a click on the inner text/icon of an `<a>` still counts.
+   * Emit the file-download or outbound-link event a click implies, if any.
+   * The rules live in {@link classifyLink}; this only turns its verdict into
+   * an event so the capture layer keeps one place where events are emitted.
    * @param {Element} el
    */
   _classifyLinkClick(el) {
-    const link = /** @type {HTMLAnchorElement|null} */ (
-      el.closest && el.closest("a[href]")
-    );
-    if (!link) return;
-    /** @type {URL} */
-    let url;
-    try {
-      url = new URL(link.href, typeof location !== "undefined" ? location.href : undefined);
-    } catch {
-      return;
-    }
-
-    const isDownload =
-      link.hasAttribute("download") || DOWNLOAD_EXTENSIONS.test(url.pathname);
-    if (isDownload) {
-      const filename =
-        link.getAttribute("download") || url.pathname.split("/").pop() || "";
-      const extMatch = url.pathname.match(/\.([a-z0-9]{2,5})(?:\?.*)?$/i);
-      this.emit("$file_download", {
-        properties: {
-          url: scrubUrl(url.href),
-          filename: filename || undefined,
-          extension: extMatch && extMatch[1] ? extMatch[1].toLowerCase() : undefined,
-          path: routePath(),
-        },
-      });
-      return;
-    }
-
-    // Outbound: real cross-origin navigation. Skip same-host links and
-    // pseudo-protocols (mailto, tel, javascript:) where hostname is empty.
-    if (
-      url.hostname &&
-      typeof location !== "undefined" &&
-      url.hostname !== location.hostname
-    ) {
-      this.emit("$outbound_link", {
-        properties: {
-          url: scrubUrl(url.href),
-          target_host: url.hostname,
-          path: routePath(),
-        },
-      });
-    }
+    const hit = classifyLink(el);
+    if (hit) this.emit(hit.eventType, { properties: hit.properties });
   }
 
   // -------------------------------------------------------------------------

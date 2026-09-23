@@ -58,7 +58,7 @@ Measured on the built bundle in Safari 27 and Firefox 155, seven interleaved rou
 
 ### Size
 
-- **Bundle size: 9.31 kB brotli on the wire / 10.36 kB gzipped / 33.9 kB minified**, plus 0.83 kB brotli for the vitals plugin if you import it. The `<script>` bundle, which includes the plugin, is 9.9 kB brotli. The chunked queue accounts for around 0.27 kB of that and buys a 25x reduction in append cost at depth.
+- **Bundle size: 9.35 kB brotli on the wire / 10.41 kB gzipped / 34.02 kB minified**, plus 0.83 kB brotli for the vitals plugin if you import it. The `<script>` bundle, which includes the plugin, is 9.9 kB brotli. The chunked queue accounts for around 0.27 kB of that and buys a 25x reduction in append cost at depth.
 
 ## [0.3.0] - 2026-09-05
 
