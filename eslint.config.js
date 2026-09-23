@@ -46,7 +46,6 @@ export default [
         Bun: "readonly",
         Response: "readonly",
         Event: "readonly",
-        PopStateEvent: "readonly",
         // DOM types used in JSDoc casts.
         Element: "readonly",
         MouseEvent: "readonly",
