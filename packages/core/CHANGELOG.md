@@ -17,6 +17,8 @@ Give the server a second, independent source for the browser a visitor claims to
 ### Fixed
 
 - **The page-hide batch is no longer lost.** The terminal flush delivered its batch with `navigator.sendBeacon` and a body typed `application/json`. That is not a CORS-safelisted request content type, so cross-origin the request needs a preflight and a beacon does not survive one; every site is cross-origin to the ingest host. `sendBeacon` still reported success, and the batch was dropped from the durable queue on the strength of it, so the events were gone with no retry and no error. Measured across Chromium, Safari and Firefox: the beacon never arrived, while `fetch` with `keepalive` arrived in all three during a real unload. The terminal flush now uses `fetch` with `keepalive`. This was losing `$page_leave` and its `engagement_time_ms`, the `$web_vital` events (LCP, INP and CLS are emitted on page hide by design) and the last events of every session that ended by navigation or close, in every release so far.
+- **A batch is removed from the queue by identity, not by position.** Confirmation is asynchronous now, so a terminal send and a normal send can be in flight over the same batch, and whichever confirms first shifts the queue. Removing "the oldest N" at that point would delete whatever had moved to the head, including events that were never sent. Each confirmation now removes exactly the events it delivered, so any interleaving is safe.
+- **A terminal batch is sent once, not twice.** A desktop close fires both `pagehide` and `visibilitychange -> hidden`. The old path committed synchronously, so the second signal found an empty queue; with asynchronous confirmation the second signal would have re-sent the batch the first was still delivering. A send already in flight now suppresses the duplicate.
 - **Nothing leaves the queue unconfirmed.** The terminal batch is now removed only on a confirmed 2xx, which a page that survives the signal does see (a tab switch or a mobile backgrounding fires the hide signal without tearing the page down). When the page really goes away the response never arrives, the batch stays queued and ships on the visitor's next page load, where the endpoint discards it if it already landed, keyed on the client-generated `event_id`. The previous behavior traded that duplicate for a permanently lost batch.
 
 
@@ -37,7 +39,7 @@ Measured on the built bundle in Safari 27 and Firefox 155, seven interleaved rou
 
 ### Size
 
-- **Bundle size: 9.53 kB brotli on the wire / 10.6 kB gzipped / 34.55 kB minified.** The three context fields cost around 0.1 kB on the wire.
+- **Bundle size: 9.56 kB brotli on the wire / 10.63 kB gzipped / 34.66 kB minified.** The three context fields cost around 0.1 kB on the wire.
 
 ## [0.3.0] - 2026-09-05
 

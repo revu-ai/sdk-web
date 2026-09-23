@@ -319,6 +319,99 @@ describe("Transport", () => {
     expect(t.queue.size()).toBe(1);
   });
 
+  test("a second terminal signal does not re-send the batch already in flight", async () => {
+    // A desktop close fires both `pagehide` and `visibilitychange -> hidden`.
+    // Confirmation is asynchronous, so without a guard the second signal peeks
+    // and re-sends the batch the first one is still delivering.
+    const fetchMock = mockFetch(() => new Promise(() => {}));
+    const { t } = makeTransport();
+    t.enqueue(makeEvent(1));
+    t.enqueue(makeEvent(2));
+
+    await t.flush(true);
+    await t.flush(true);
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(t.queue.size()).toBe(2);
+  });
+
+  test("a terminal send confirming after a normal flush drained the queue deletes nothing", async () => {
+    // The real corruption case. A terminal send is unconfirmed while a normal
+    // flush delivers and removes the SAME batch, so the head shifts. Removing
+    // "the first N" when the terminal send finally confirms would then delete
+    // whatever now sits at the head, which was never sent.
+    /** @type {(v: Response) => void} */
+    let confirmTerminal;
+    let call = 0;
+    mockFetch(() => {
+      call += 1;
+      if (call === 1) {
+        return new Promise((resolve) => {
+          confirmTerminal = () => resolve(new Response("", { status: 200 }));
+        });
+      }
+      return Promise.resolve(new Response("", { status: 200 }));
+    });
+    const { t } = makeTransport();
+    t.enqueue(makeEvent(1));
+    t.enqueue(makeEvent(2));
+
+    await t.flush(true); // terminal, unconfirmed
+    await t.flush(); // normal flush delivers and removes the same two
+    await waitUntil(() => t.queue.size() === 0);
+
+    // The page survived and kept capturing.
+    const later1 = makeEvent(3);
+    const later2 = makeEvent(4);
+    t.enqueue(later1);
+    t.enqueue(later2);
+
+    confirmTerminal();
+    await new Promise((r) => setTimeout(r, 5));
+
+    // The late confirmation must not touch the new events.
+    expect(t.queue.peek(10)).toEqual([later1, later2]);
+  });
+
+  test("a normal flush confirming after a terminal send removed its batch deletes nothing", async () => {
+    // Mirror of the case above, with the roles reversed: the terminal send
+    // confirms first and removes the batch, then the normal request confirms.
+    /** @type {(v: Response) => void} */
+    let confirmNormal;
+    /** @type {(v: Response) => void} */
+    let confirmTerminal;
+    let call = 0;
+    mockFetch(() => {
+      call += 1;
+      if (call === 1) {
+        return new Promise((resolve) => {
+          confirmTerminal = () => resolve(new Response("", { status: 200 }));
+        });
+      }
+      return new Promise((resolve) => {
+        confirmNormal = () => resolve(new Response("", { status: 200 }));
+      });
+    });
+    const { t } = makeTransport();
+    t.enqueue(makeEvent(1));
+    t.enqueue(makeEvent(2));
+
+    await t.flush(true); // terminal, unconfirmed
+    const normal = t.flush(); // normal, unconfirmed, same batch
+    await waitUntil(() => t.sending);
+
+    confirmTerminal();
+    await waitUntil(() => t.queue.size() === 0);
+
+    const later = makeEvent(3);
+    t.enqueue(later);
+
+    confirmNormal();
+    await normal;
+
+    expect(t.queue.peek(10)).toEqual([later]);
+  });
+
   test("maxBatch caps the events sent per request and leaves the remainder queued", async () => {
     const fetchMock = mockFetch(() => Promise.resolve(new Response("", { status: 200 })));
     const { t } = makeTransport({ maxBatch: 2 });

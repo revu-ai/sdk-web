@@ -34,6 +34,13 @@ export class Transport {
     this.timer = null;
     /** Guards against overlapping flushes (interval vs. size-triggered). */
     this.sending = false;
+    /**
+     * True while an unconfirmed terminal (page-hide) send is in flight. A
+     * desktop close fires both `pagehide` and `visibilitychange -> hidden`,
+     * and confirmation is asynchronous, so without this the second signal
+     * re-sends the batch the first one is still delivering.
+     */
+    this.terminalSending = false;
     /** Consecutive failures, for exponential backoff. */
     this.failures = 0;
     /** Epoch ms before which we should not attempt a network flush. */
@@ -195,7 +202,15 @@ export class Transport {
       // so a batch that did land is discarded server-side rather than counted
       // twice. Optimistic committing is what turns an undelivered batch into a
       // permanently lost one, so it is not done here at any cost in duplicates.
+      // A desktop close fires BOTH `pagehide` and `visibilitychange -> hidden`.
+      // The old beacon committed synchronously, so the second signal found an
+      // empty queue and short-circuited. Confirmation is now asynchronous, so
+      // the second signal would otherwise peek and re-send the same batch.
+      // Skipping while one is in flight keeps a terminal close to one request.
+      if (this.terminalSending) return false;
+
       if (typeof fetch === "function") {
+        this.terminalSending = true;
         // Deliberately not awaited: the page may be torn down mid-flight, and
         // awaiting would only delay the handler without changing the outcome.
         fetch(this.endpoint, {
@@ -205,10 +220,13 @@ export class Transport {
           keepalive: true,
         })
           .then((res) => {
-            if (res.ok) this.queue.commit(batch.length);
+            if (res.ok) this.queue.remove(batch);
           })
           .catch(() => {
             // Page gone, or the send failed. The batch is still queued.
+          })
+          .finally(() => {
+            this.terminalSending = false;
           });
         return true;
       }
@@ -227,7 +245,11 @@ export class Transport {
         keepalive: true,
       });
       if (res.ok) {
-        this.queue.commit(batch.length);
+        // By identity, not by position. A terminal flush can confirm and
+        // remove its own batch while this request is still in flight, which
+        // shifts the queue; a positional commit would then delete however
+        // many events now sit at the head, including ones never sent.
+        this.queue.remove(batch);
         this.failures = 0;
         this.backoffUntil = 0;
         return true;
