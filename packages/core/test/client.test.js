@@ -802,3 +802,59 @@ describe("RevuClient > beforeSend", () => {
     expect(events[0].event_type).toBe("rewritten");
   });
 });
+
+describe("RevuClient > no shared mutable state reaches events", () => {
+  // Every non-primitive on a built event must belong to that event alone.
+  // `beforeSend` is documented to hand callers an event they may mutate, so
+  // anything shared between events turns one host edit into a silent,
+  // page-wide contamination. This sweeps the whole event rather than naming
+  // individual fields, so a future field that shares state fails here.
+  test("mutating every object and array on one event does not affect the next", () => {
+    Object.defineProperty(navigator, "userAgentData", {
+      configurable: true,
+      value: { brands: [{ brand: "Chromium", version: "152" }], mobile: false, platform: "macOS" },
+    });
+    Object.defineProperty(navigator, "languages", { configurable: true, value: ["en-US", "en"] });
+    const { client, events } = makeClient();
+
+    client.capture("first", { nested: { k: 1 }, list: [1, 2] });
+    const first = events[events.length - 1];
+
+    /** @param {any} obj */
+    const mutateEverything = (obj) => {
+      for (const value of Object.values(obj || {})) {
+        if (Array.isArray(value)) value.push("MUTATED");
+        else if (value && typeof value === "object") {
+          /** @type {any} */ (value).__mutated__ = true;
+          mutateEverything(value);
+        }
+      }
+    };
+    mutateEverything(first.context);
+    mutateEverything(first.properties);
+
+    client.capture("second", {});
+    const second = events[events.length - 1];
+    expect(JSON.stringify(second)).not.toContain("MUTATED");
+    expect(JSON.stringify(second)).not.toContain("__mutated__");
+  });
+
+  test("the array-valued context fields survive a JSON round trip intact", () => {
+    // The durable queue persists events as JSON, so anything the context
+    // carries has to serialize and come back unchanged.
+    Object.defineProperty(navigator, "userAgentData", {
+      configurable: true,
+      value: {
+        brands: [{ brand: "Not?A_Brand", version: "24" }, { brand: "Chromium", version: "152" }],
+        mobile: false,
+        platform: "macOS",
+      },
+    });
+    const { client, events } = makeClient();
+    client.capture("round_trip", {});
+    const event = events[events.length - 1];
+    const revived = JSON.parse(JSON.stringify(event));
+    expect(revived.context.ua_brands).toEqual(event.context.ua_brands);
+    expect(revived.context.languages).toEqual(event.context.languages);
+  });
+});

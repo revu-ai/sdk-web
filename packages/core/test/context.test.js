@@ -318,6 +318,61 @@ describe("Context > hostile navigator getters", () => {
   });
 });
 
+describe("Context > stripped globals (SSR and exotic embeddings)", () => {
+  // The module can be imported where the DOM does not exist (server-side
+  // rendering, a worker, a test harness). Every read is guarded, so the
+  // context degrades to whatever is available and never throws.
+  const strip = (/** @type {string[]} */ names, /** @type {() => any} */ fn) => {
+    const saved = names.map((n) => [n, Object.getOwnPropertyDescriptor(globalThis, n)]);
+    for (const n of names) {
+      try {
+        Object.defineProperty(globalThis, n, { configurable: true, value: undefined });
+      } catch {}
+    }
+    try {
+      return fn();
+    } finally {
+      for (const [n, d] of saved) {
+        if (d) {
+          try {
+            Object.defineProperty(globalThis, /** @type {string} */ (n), d);
+          } catch {}
+        }
+      }
+    }
+  };
+
+  test("survives a missing navigator", () => {
+    const ctx = strip(["navigator"], () => new Context().build());
+    expect(ctx).toBeTruthy();
+    expect("user_agent" in ctx).toBe(false);
+  });
+
+  test("survives a missing performance", () => {
+    const ctx = strip(["performance"], () => new Context().build());
+    expect(ctx).toBeTruthy();
+    expect("navigation_type" in ctx).toBe(false);
+  });
+
+  test("survives full SSR with no DOM globals at all", () => {
+    const ctx = strip(["navigator", "window", "screen", "document", "performance"], () =>
+      new Context().build(),
+    );
+    expect(ctx).toBeTruthy();
+    expect(() => JSON.stringify(ctx)).not.toThrow();
+  });
+
+  test("build() stays repeatable with globals stripped", () => {
+    strip(["navigator", "performance"], () => {
+      const c = new Context();
+      expect(() => {
+        c.build();
+        c.build();
+      }).not.toThrow();
+    });
+  });
+});
+
 describe("Context > URL query is not parsed on the SDK", () => {
   // UTM and click-id derivation lives on the server, which parses them
   // from `$pageview.properties.url` and writes the result to the visitor
