@@ -3,9 +3,9 @@
  * endpoint. Events go through a {@link PersistentQueue} (localStorage-backed),
  * so they survive reloads, navigation, and offline periods. Batches flush on
  * size, on an interval, when connectivity returns (`online`), and on page-hide
- * (`sendBeacon`, so in-flight events survive navigation/close). Failed sends
- * stay queued and retry with exponential backoff, so 429 / 503 / offline
- * conditions degrade gracefully with no data loss.
+ * (`fetch` with `keepalive`, so in-flight events survive navigation/close).
+ * Failed sends stay queued and retry with exponential backoff, so 429 / 503 /
+ * offline conditions degrade gracefully with no data loss.
  */
 
 import { PersistentQueue } from "./queue.js";
@@ -136,7 +136,8 @@ export class Transport {
   /**
    * Send the oldest batch. The batch is only removed from the durable queue
    * once the send succeeds, so failures (network, 429, 503) leave events queued
-   * for the next attempt. On page-hide uses `sendBeacon` (fire-and-forget).
+   * for the next attempt. On page-hide uses `fetch` with `keepalive`, and
+   * commits only on a confirmed 2xx (see the terminal branch below).
    * @param {boolean} [isUnload=false]
    * @returns {Promise<boolean>}
    */
@@ -172,15 +173,49 @@ export class Transport {
       }
     }
 
-    if (
-      isUnload &&
-      typeof navigator !== "undefined" &&
-      typeof navigator.sendBeacon === "function"
-    ) {
-      // Fire-and-forget on unload; if the browser accepts it, drop the batch.
-      const queued = safeBeacon(navigator, this.endpoint, body);
-      if (queued) this.queue.commit(batch.length);
-      return queued;
+    if (isUnload) {
+      // Terminal flush. Two rules here, and both exist because a page that is
+      // going away cannot confirm anything.
+      //
+      // DELIVERY: `fetch` with `keepalive` is the path that actually survives
+      // an unload cross-origin, and every customer is cross-origin (their page
+      // posts to our ingest host). The flag is passed unconditionally rather
+      // than feature-detected: an engine that does not honor it ignores the
+      // option and still sends, and since nothing is committed unconfirmed
+      // (below), a request that engine cancels costs a retry rather than the
+      // batch. `sendBeacon` remains only for an environment with no `fetch`.
+      //
+      // COMMIT: nothing is committed on faith. The batch leaves the durable
+      // queue only on a confirmed 2xx, which is reachable whenever the page
+      // survives the signal (a tab switch or a mobile backgrounding fires
+      // visibilitychange without tearing the page down, and that is the common
+      // case). When the page really does go away the response never arrives,
+      // the batch stays queued, and it ships on the visitor's next page load.
+      // The ingest endpoint is idempotent on the client-generated `event_id`,
+      // so a batch that did land is discarded server-side rather than counted
+      // twice. Optimistic committing is what turns an undelivered batch into a
+      // permanently lost one, so it is not done here at any cost in duplicates.
+      if (typeof fetch === "function") {
+        // Deliberately not awaited: the page may be torn down mid-flight, and
+        // awaiting would only delay the handler without changing the outcome.
+        fetch(this.endpoint, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body,
+          keepalive: true,
+        })
+          .then((res) => {
+            if (res.ok) this.queue.commit(batch.length);
+          })
+          .catch(() => {
+            // Page gone, or the send failed. The batch is still queued.
+          });
+        return true;
+      }
+      if (typeof navigator !== "undefined" && typeof navigator.sendBeacon === "function") {
+        return safeBeacon(navigator, this.endpoint, body);
+      }
+      return false;
     }
 
     this.sending = true;

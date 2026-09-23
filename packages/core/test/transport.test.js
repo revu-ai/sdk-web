@@ -248,9 +248,10 @@ describe("Transport", () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
-  test("uses sendBeacon on unload and commits on success", async () => {
+  test("uses fetch with keepalive on unload, so the send survives the page", async () => {
     const sendBeacon = mock(() => true);
     /** @type {any} */ (navigator).sendBeacon = sendBeacon;
+    const fetchMock = mockFetch(() => Promise.resolve(new Response("", { status: 200 })));
 
     const { t } = makeTransport();
     t.enqueue(makeEvent(1));
@@ -258,39 +259,63 @@ describe("Transport", () => {
     const ok = await t.flush(true);
 
     expect(ok).toBe(true);
-    expect(sendBeacon).toHaveBeenCalledTimes(1);
-    expect(t.queue.size()).toBe(0);
-    const [url, body] = sendBeacon.mock.calls[0];
+    // sendBeacon with a non-safelisted Content-Type does not survive a
+    // cross-origin unload, so it is not the delivery path any more.
+    expect(sendBeacon).not.toHaveBeenCalled();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [url, init] = fetchMock.mock.calls[0];
     expect(url).toBe("https://api.test/v1/behavior/events");
-    // sendBeacon receives a Blob (not a string) so the request goes out
-    // with `Content-Type: application/json`; with a raw string body the
-    // browser defaults to `text/plain;charset=UTF-8`, which the ingest
-    // endpoint rejects.
-    expect(body).toBeInstanceOf(Blob);
-    expect(/** @type {Blob} */ (body).type).toBe("application/json");
-    const parsed = JSON.parse(await /** @type {Blob} */ (body).text());
-    expect(parsed.batch).toHaveLength(1);
+    expect(init.keepalive).toBe(true);
+    expect(init.method).toBe("POST");
+    expect(init.headers["Content-Type"]).toBe("application/json");
+    expect(JSON.parse(init.body).batch).toHaveLength(1);
   });
 
-  test("keeps the batch when sendBeacon refuses (returns false)", async () => {
-    /** @type {any} */ (navigator).sendBeacon = () => false;
+  test("commits the unload batch only once the send is confirmed", async () => {
+    // A page that survives the signal (tab switch, mobile backgrounding) does
+    // see the response, and only then may the batch leave the durable queue.
+    const fetchMock = mockFetch(() => Promise.resolve(new Response("", { status: 200 })));
     const { t } = makeTransport();
     t.enqueue(makeEvent(1));
 
-    const ok = await t.flush(true);
+    await t.flush(true);
+    await waitUntil(() => t.queue.size() === 0);
 
-    expect(ok).toBe(false);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(t.queue.size()).toBe(0);
+  });
+
+  test("keeps the unload batch when the send never resolves", async () => {
+    // The page really went away. Nothing confirms, so nothing is dropped: the
+    // batch ships on the next page load and the endpoint discards it if it
+    // already landed, keyed on the client-generated event_id.
+    mockFetch(() => new Promise(() => {}));
+    const { t } = makeTransport();
+    t.enqueue(makeEvent(1));
+
+    await t.flush(true);
+
     expect(t.queue.size()).toBe(1);
   });
 
-  test("never throws if sendBeacon itself throws", async () => {
-    /** @type {any} */ (navigator).sendBeacon = () => {
-      throw new Error("CSP block");
-    };
+  test("keeps the unload batch when the endpoint rejects it", async () => {
+    mockFetch(() => Promise.resolve(new Response("", { status: 503 })));
     const { t } = makeTransport();
     t.enqueue(makeEvent(1));
 
-    await expect(t.flush(true)).resolves.toBe(false);
+    await t.flush(true);
+    await new Promise((r) => setTimeout(r, 5));
+
+    expect(t.queue.size()).toBe(1);
+  });
+
+  test("never throws, and keeps the batch, if the unload send fails outright", async () => {
+    mockFetch(() => Promise.reject(new Error("network gone")));
+    const { t } = makeTransport();
+    t.enqueue(makeEvent(1));
+
+    await expect(t.flush(true)).resolves.toBe(true);
+    await new Promise((r) => setTimeout(r, 5));
     expect(t.queue.size()).toBe(1);
   });
 
@@ -406,7 +431,7 @@ describe("Transport", () => {
     expect(t.queue.size()).toBe(0);
   });
 
-  test("installPageHideFlush() wires a 'pagehide' listener that flushes via sendBeacon", async () => {
+  test("installPageHideFlush() wires a 'pagehide' listener that flushes on unload", async () => {
     // Only THIS transport's listener may fire, not the ones other tests leaked.
     restoreListeners = isolateTerminalListeners();
     const sendBeacon = mock(() => true);
@@ -428,13 +453,16 @@ describe("Transport", () => {
     t.enqueue(makeEvent(1));
 
     window.dispatchEvent(new Event("pagehide"));
-    await waitUntil(() => sendBeacon.mock.calls.length >= 1);
+    await waitUntil(() => fetchMock.mock.calls.length >= 1);
 
-    // pagehide path must take the beacon, NOT fetch: keepalive fetch under
-    // unload is unreliable across browsers, which is why we wired beacon.
-    expect(sendBeacon).toHaveBeenCalledTimes(1);
-    expect(fetchMock).not.toHaveBeenCalled();
-    expect(t.queue.size()).toBe(0);
+    // The pagehide path must take `fetch` with `keepalive`, NOT the beacon.
+    // A beacon carrying a non-safelisted Content-Type does not survive a
+    // cross-origin unload, and every customer is cross-origin; keepalive
+    // fetch does survive it.
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock.mock.calls[0][1].keepalive).toBe(true);
+    expect(sendBeacon).not.toHaveBeenCalled();
+    await waitUntil(() => t.queue.size() === 0);
     clearInterval(t.timer ?? undefined);
   });
 
@@ -458,11 +486,12 @@ describe("Transport", () => {
     // localStorage forever (until the user opens the page again).
     Object.defineProperty(document, "visibilityState", { value: "hidden", configurable: true });
     document.dispatchEvent(new Event("visibilitychange"));
-    await waitUntil(() => sendBeacon.mock.calls.length >= 1);
+    await waitUntil(() => fetchMock.mock.calls.length >= 1);
 
-    expect(sendBeacon).toHaveBeenCalledTimes(1);
-    expect(fetchMock).not.toHaveBeenCalled();
-    expect(t.queue.size()).toBe(0);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock.mock.calls[0][1].keepalive).toBe(true);
+    expect(sendBeacon).not.toHaveBeenCalled();
+    await waitUntil(() => t.queue.size() === 0);
     clearInterval(t.timer ?? undefined);
   });
 
@@ -521,11 +550,11 @@ describe("Transport", () => {
   test("terminal flush is confined to the current transport despite leaked listeners (regression: CI 9x amplification)", async () => {
     const sendBeacon = mock(() => true);
     /** @type {any} */ (navigator).sendBeacon = sendBeacon;
-    mockFetch(() => Promise.resolve(new Response("", { status: 200 })));
+    const fetchMock = mockFetch(() => Promise.resolve(new Response("", { status: 200 })));
 
     // Stand in for the pagehide listeners other tests/files leak onto the shared
     // window with no teardown (installPageHideFlush has no unlisten). Registered
-    // on the REAL window BEFORE isolation, each would call sendBeacon if it fired
+    // on the REAL window BEFORE isolation, each would fire if it were reached
     // - the mechanism behind the "Received 9" CI failure. We keep references so
     // we can remove them, since the SDK cannot.
     const leaked = Array.from({ length: 8 }, () =>
@@ -540,10 +569,13 @@ describe("Transport", () => {
     t.enqueue(makeEvent(1));
 
     window.dispatchEvent(new Event("pagehide"));
-    await waitUntil(() => sendBeacon.mock.calls.length >= 1);
+    await waitUntil(() => fetchMock.mock.calls.length >= 1);
 
-    // Exactly one call - this transport - not one per leaked listener.
-    expect(sendBeacon).toHaveBeenCalledTimes(1);
+    // Exactly one send - this transport - not one per leaked listener. The
+    // leaked listeners mark themselves via sendBeacon, which the transport no
+    // longer uses, so any beacon call here means a leak was reached.
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(sendBeacon).not.toHaveBeenCalled();
     for (const l of leaked) expect(l).not.toHaveBeenCalled();
 
     clearInterval(t.timer ?? undefined);

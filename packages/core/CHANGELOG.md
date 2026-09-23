@@ -16,6 +16,10 @@ Give the server a second, independent source for the browser a visitor claims to
 
 ### Fixed
 
+- **The page-hide batch is no longer lost.** The terminal flush delivered its batch with `navigator.sendBeacon` and a body typed `application/json`. That is not a CORS-safelisted request content type, so cross-origin the request needs a preflight and a beacon does not survive one; every site is cross-origin to the ingest host. `sendBeacon` still reported success, and the batch was dropped from the durable queue on the strength of it, so the events were gone with no retry and no error. Measured across Chromium, Safari and Firefox: the beacon never arrived, while `fetch` with `keepalive` arrived in all three during a real unload. The terminal flush now uses `fetch` with `keepalive`. This was losing `$page_leave` and its `engagement_time_ms`, the `$web_vital` events (LCP, INP and CLS are emitted on page hide by design) and the last events of every session that ended by navigation or close, in every release so far.
+- **Nothing leaves the queue unconfirmed.** The terminal batch is now removed only on a confirmed 2xx, which a page that survives the signal does see (a tab switch or a mobile backgrounding fires the hide signal without tearing the page down). When the page really goes away the response never arrives, the batch stays queued and ships on the visitor's next page load, where the endpoint discards it if it already landed, keyed on the client-generated `event_id`. The previous behavior traded that duplicate for a permanently lost batch.
+
+
 - **Array-valued context fields are no longer shared between events.** `context.ua_brands` and `context.languages` are `FrozenArray` values owned by the browser engine. They are now copied when read and copied again per event, so a `beforeSend` hook that adjusts one event's list cannot leak that edit into every later event on the page, and the engine's own arrays are never handed out. Every other context value is a primitive and was never affected.
 - **A hostile `navigator` getter can no longer suppress all capture.** User-agent spoofing extensions and privacy tools replace `navigator` properties with getters of their own, and a badly written one throws on read. Every `navigator` read in the context layer is now guarded, so such a getter costs at most the field it belongs to instead of failing `init()` and leaving the visitor with no analytics. `userAgentData`, the property those tools replace most often, is read last so a throw there cannot cost the signals collected before it.
 
@@ -33,7 +37,7 @@ Measured on the built bundle in Safari 27 and Firefox 155, seven interleaved rou
 
 ### Size
 
-- **Bundle size: 9.5 kB brotli on the wire / 10.56 kB gzipped / 34.38 kB minified.** The three fields cost around 0.1 kB on the wire.
+- **Bundle size: 9.53 kB brotli on the wire / 10.6 kB gzipped / 34.55 kB minified.** The three context fields cost around 0.1 kB on the wire.
 
 ## [0.3.0] - 2026-09-05
 

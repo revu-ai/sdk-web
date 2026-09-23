@@ -44,6 +44,7 @@ export default [
         Document: "readonly",
         TextEncoder: "readonly",
         Bun: "readonly",
+        Request: "readonly",
         Response: "readonly",
         Blob: "readonly",
         Event: "readonly",
