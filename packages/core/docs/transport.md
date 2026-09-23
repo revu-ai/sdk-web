@@ -14,9 +14,9 @@ retrying transport, and two terminal flush paths for unload.
   domain for [first-party ingest](./first-party-ingest.md).
 - **Body.** JSON with `{ api_key, batch }`, content type
   `application/json`.
-- **Method.** `fetch` with `keepalive: true` while the page is live;
-  `sendBeacon` (with an explicit `application/json` Blob) on
-  `pagehide` and `visibilitychange -> hidden`.
+- **Method.** `fetch` with `keepalive: true`, both while the page is
+  live and on `pagehide` / `visibilitychange -> hidden`. `keepalive` is
+  what lets a request outlive the page that started it.
 
 ## When the transport flushes
 
@@ -28,7 +28,7 @@ The transport flushes on any of:
 - **Connectivity returns.** On the `online` event, the failure counter
   and backoff reset and a flush attempts immediately.
 - **Terminal lifecycle.** `pagehide` and `visibilitychange -> hidden`
-  both trigger a `sendBeacon` flush so the final batch survives unload.
+  both trigger a `keepalive` flush so the final batch survives unload.
 - **Manual.** [`revu.flush()`](./api.md#revuflush) drains the buffer
   immediately and resolves to `true` on success.
 
@@ -47,6 +47,15 @@ Events are appended to a localStorage-backed FIFO queue on every
 - The queue is bounded by `maxQueue` (default 1000). When the cap is
   hit, the oldest events are pruned first (recent behavior is more
   valuable than stale backlog).
+- A batch is removed from the queue only once the send is confirmed,
+  and by identity rather than by position, so a confirmation arriving
+  late can never remove events it did not deliver. A terminal flush
+  whose response never arrives (the page really went away) leaves the
+  batch queued; it ships on the next page load and the endpoint
+  discards it if it already landed, keyed on `event_id`.
+- Each request is bounded by size as well as by `maxBatch`, because a
+  `keepalive` request has a body limit of roughly 64 KiB per origin.
+  A batch that would exceed it is split across flushes.
 - A successful send only commits the batch (removes it from the queue)
   after the server acknowledges. A failed send leaves events queued
   for the next attempt.
@@ -81,7 +90,7 @@ target fire in registration order during the bubble phase, so the
 transport's terminal handler runs after every emit-on-terminal module
 (autocapture's `$page_leave`, vitals' LCP / INP / CLS report, any
 plugin doing the same). That ordering guarantees the final batch
-already contains those last events when `sendBeacon` ships it.
+already contains those last events when the terminal flush ships it.
 
 iOS Safari is the reason two terminal events are wired instead of one.
 On desktop, `pagehide` covers tab close, navigation, and bfcache

@@ -106,14 +106,13 @@ export class Transport {
    *     so a queue-only-on-pagehide design strands `$page_leave` in
    *     localStorage forever (until the user opens the page again).
    *
-   * Both branches gate on `!this.sending` to prevent a queue-corrupting race:
-   * if a normal `flush(false)` is mid-fetch and the terminal signal fires,
-   * `flush(true)` would otherwise peek the SAME batch the fetch is sending,
-   * sendBeacon-deliver it (committing N events), then the fetch returns and
-   * commits N events again, dropping events `[N+1..2N]` from the queue
-   * without sending them. Yielding to the in-flight fetch avoids that. The
-   * fetch is fired with `keepalive: true` so the browser still delivers it
-   * after the page hides; if the OS kills the process before completion
+   * Both branches gate on `!this.sending` so a terminal signal yields to a
+   * normal flush that is already mid-request, rather than peeking and
+   * re-sending the same batch. A batch is also removed from the queue by
+   * identity rather than by position, so even if the two did overlap, a
+   * confirmation arriving late could not remove events it had not delivered.
+   * The request is fired with `keepalive: true` so the browser still delivers
+   * it after the page hides; if the OS kills the process before completion
    * (rare), the events remain durably queued and ship on next open. When
    * both `pagehide` and `visibilitychange -> hidden` fire (desktop close),
    * the second invocation finds an empty queue and short-circuits via the
@@ -224,7 +223,7 @@ export class Transport {
       // than feature-detected: an engine that does not honor it ignores the
       // option and still sends, and since nothing is committed unconfirmed
       // (below), a request that engine cancels costs a retry rather than the
-      // batch. `sendBeacon` remains only for an environment with no `fetch`.
+      // batch.
       //
       // COMMIT: nothing is committed on faith. The batch leaves the durable
       // queue only on a confirmed 2xx, which is reachable whenever the page
@@ -246,38 +245,50 @@ export class Transport {
 
       if (typeof fetch === "function") {
         this.terminalSending = true;
-        // Deliberately not awaited: the page may be torn down mid-flight, and
-        // awaiting would only delay the handler without changing the outcome.
-        fetch(this.endpoint, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body,
-          keepalive: true,
-        })
-          .then((res) => {
-            if (res.ok) {
-              this.queue.remove(batch);
-              // A confirmed terminal send is proof the endpoint is healthy, so
-              // it clears the backoff the same way a normal one does. Without
-              // this, a session that backed off during an outage keeps
-              // refusing normal flushes for up to the backoff ceiling even
-              // after it has evidence of recovery, which strands a backlog
-              // that could have been draining.
-              this.failures = 0;
-              this.backoffUntil = 0;
-            }
+        // Wrapped because `fetch` can throw SYNCHRONOUSLY rather than
+        // rejecting: a CSP `connect-src` block does it, and so does a page
+        // that has replaced `fetch` with something of its own. This call is
+        // not awaited (see below), so an escaping error would surface as an
+        // unhandled rejection in the host page rather than being contained.
+        try {
+          // Deliberately not awaited: the page may be torn down mid-flight,
+          // and awaiting would only delay the handler without changing the
+          // outcome.
+          fetch(this.endpoint, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body,
+            keepalive: true,
           })
-          .catch(() => {
-            // Page gone, or the send failed. The batch is still queued.
-          })
-          .finally(() => {
-            this.terminalSending = false;
-          });
-        return true;
+            .then((res) => {
+              if (res.ok) {
+                this.queue.remove(batch);
+                // A confirmed terminal send is proof the endpoint is healthy,
+                // so it clears the backoff the same way a normal one does.
+                // Without this, a session that backed off during an outage
+                // keeps refusing normal flushes for up to the backoff ceiling
+                // even after it has evidence of recovery, which strands a
+                // backlog that could have been draining.
+                this.failures = 0;
+                this.backoffUntil = 0;
+              }
+            })
+            .catch(() => {
+              // Page gone, or the send failed. The batch is still queued.
+            })
+            .finally(() => {
+              this.terminalSending = false;
+            });
+          return true;
+        } catch {
+          // Never reached the network. The batch stays queued for the next
+          // page load; the guard is cleared so a later signal can retry.
+          this.terminalSending = false;
+          return false;
+        }
       }
-      if (typeof navigator !== "undefined" && typeof navigator.sendBeacon === "function") {
-        return safeBeacon(navigator, this.endpoint, body);
-      }
+      // No `fetch` at all. Nothing can be sent: the normal path below calls
+      // it unconditionally, so a transport without it never delivers anyway.
       return false;
     }
 
@@ -351,24 +362,3 @@ function isSerializable(event) {
   }
 }
 
-/**
- * `sendBeacon` defaults a string body to `Content-Type: text/plain;
- * charset=UTF-8`, which the ingest endpoint rejects (it only parses
- * `application/json` bodies). Wrap the body in a Blob with the right
- * type so the terminal pagehide flush actually reaches the server.
- *
- * Also wraps the call so a failure (e.g. CSP connect-src block) never
- * propagates into the unloading host page.
- * @param {Navigator} nav
- * @param {string} url
- * @param {string} body
- * @returns {boolean}
- */
-function safeBeacon(nav, url, body) {
-  try {
-    const blob = new Blob([body], { type: "application/json" });
-    return nav.sendBeacon(url, blob);
-  } catch {
-    return false;
-  }
-}

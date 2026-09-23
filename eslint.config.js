@@ -44,16 +44,13 @@ export default [
         Document: "readonly",
         TextEncoder: "readonly",
         Bun: "readonly",
-        Request: "readonly",
         Response: "readonly",
-        Blob: "readonly",
         Event: "readonly",
         PopStateEvent: "readonly",
         // DOM types used in JSDoc casts.
         Element: "readonly",
         MouseEvent: "readonly",
         Storage: "readonly",
-        Navigator: "readonly",
       },
     },
     rules: {

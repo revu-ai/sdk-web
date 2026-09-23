@@ -319,6 +319,24 @@ describe("Transport", () => {
     expect(t.queue.size()).toBe(1);
   });
 
+  test("never lets a synchronous fetch failure escape the terminal flush", async () => {
+    // `fetch` can throw rather than reject: a CSP connect-src block does it,
+    // and so does a page that has replaced `fetch` with its own. The terminal
+    // call is not awaited, so an escaping error would surface in the host page
+    // as an unhandled rejection.
+    globalThis.fetch = /** @type {any} */ (() => {
+      throw new Error("CSP connect-src block");
+    });
+    const { t } = makeTransport();
+    t.enqueue(makeEvent(1));
+
+    await expect(t.flush(true)).resolves.toBe(false);
+    // Nothing reached the network, so nothing is dropped.
+    expect(t.queue.size()).toBe(1);
+    // And the guard is cleared, so a later terminal signal can still try.
+    expect(t.terminalSending).toBe(false);
+  });
+
   test("a second terminal signal does not re-send the batch already in flight", async () => {
     // A desktop close fires both `pagehide` and `visibilitychange -> hidden`.
     // Confirmation is asynchronous, so without a guard the second signal peeks

@@ -59,7 +59,7 @@ them, not front-to-back reading.
   when to ship as a subpath plugin vs a separate package, and a worked
   example.
 - **[Troubleshooting](./troubleshooting.md)** - common failures and
-  how to isolate them: CSP, `sendBeacon` Content-Type, mobile Safari
+  how to isolate them: CSP, the terminal flush, mobile Safari
   terminal events, durable queue origin scoping, identify and reset
   semantics, unexpected session rotation.
 

@@ -43,7 +43,7 @@ allowlists are enforced server-side) and authenticates on the public key
 in the request body, not on the request host.
 
 Both transport paths - the live `fetch` (with `keepalive`) and the
-`sendBeacon` terminal flush on page hide - target `host`, so both are
+terminal flush on page hide - target `host`, so both are
 proxied identically. The durable queue is scoped to the page origin and
 is unaffected.
 

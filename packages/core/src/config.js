@@ -94,7 +94,7 @@ function validateEnvironment(environment) {
 /**
  * Validate that the configured `host` is a syntactically valid URL whose
  * scheme is `http:` or `https:`. We do not allow file:, ws:, javascript:,
- * etc. - the SDK only ever issues fetch/sendBeacon to this base, and any
+ * etc. - the SDK only ever issues requests to this base, and any
  * non-HTTP scheme is either a configuration typo or an exploitation
  * attempt. Throws a `[REVU] init() ...` error on failure.
  *
