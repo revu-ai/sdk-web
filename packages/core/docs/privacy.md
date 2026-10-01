@@ -231,7 +231,3 @@ for (const key of keys) {
 
 This clears what is stored. Events the open page already holds in memory
 still flush as described above.
-
-A server-side right-to-be-forgotten helper that also purges already-ingested
-events is planned; until then, the above fully disables capture and clears
-local state.
