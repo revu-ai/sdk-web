@@ -10,7 +10,8 @@ import { describe, expect, test } from "bun:test";
 import pkg from "../package.json";
 
 const root = new URL("../", import.meta.url);
-const built = await Bun.file(new URL("dist/index.js", root)).exists();
+// `bun run types` writes the .d.ts files after the build, so check for those.
+const built = await Bun.file(new URL("dist/index.d.ts", root)).exists();
 
 /** @param {unknown} target @returns {string[]} */
 const paths = (target) =>
