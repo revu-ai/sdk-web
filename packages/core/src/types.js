@@ -7,7 +7,7 @@
 /**
  * User-supplied configuration passed to {@link init}.
  * @typedef {object} RevuConfig
- * @property {string} apiKey               Public ingest write-key (org/entity resolved server-side).
+ * @property {string} apiKey               Public ingest write-key (resolved server-side to your organization, touchpoint and environment).
  * @property {string} [host="https://api.revu.ai"] Ingest host base URL (the API service, not the app/dashboard).
  * @property {"production"|"staging"|"development"} [environment="production"] Environment label stamped on every event as `properties.$environment`. The dashboard filters out non-production environments by default so dev clicks and staging integration tests do not pollute production analytics. Invalid values throw at init.
  * @property {boolean} [autocapture=true]  Auto-capture clicks + page views with no instrumentation.
