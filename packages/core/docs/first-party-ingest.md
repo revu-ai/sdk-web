@@ -57,6 +57,19 @@ stable and match it to the `host` you pass to `init()`.
 **Restrict the forward to the behavior path** (`/v1/behavior/`) rather
 than proxying everything, so the rule is not an open relay.
 
+**Forward the browser's request headers unchanged.** Ingest uses the
+headers the browser sends with each request to tell automated traffic
+from real visitors: `User-Agent`, `Sec-CH-UA`, `Sec-CH-UA-Mobile`,
+`Sec-CH-UA-Platform`, `Sec-Fetch-Site`, `Sec-Fetch-Mode`,
+`Sec-Fetch-Dest` and `Origin`. Behind a proxy, ingest sees only what
+the proxy forwards. A proxy that drops them or sends its own
+`User-Agent` breaks nothing, but that traffic loses this detection. This
+collects nothing extra from the visitor: these are the same headers the
+browser sends to `api.revu.ai` on a direct install. The Cloudflare
+Worker, nginx and Caddy recipes below forward client headers by default.
+On a platform rewrite such as Vercel, confirm the headers arrive
+upstream rather than assuming it.
+
 ### Cloudflare Worker
 
 Route `yourapp.com/ingest/*` to this Worker:
