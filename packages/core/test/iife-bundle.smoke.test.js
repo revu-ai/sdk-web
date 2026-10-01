@@ -28,7 +28,7 @@
  * fresh bundle there.
  */
 
-import { beforeEach, describe, expect, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { existsSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { noopFetch } from "./setup.js";
@@ -86,6 +86,65 @@ describe.skipIf(!bundleAvailable)(
         /** @type {any} */ (globalThis.window).fetch = noopFetch;
       }
     });
+
+    /**
+     * Console output from the SDK during the current test. Every client here
+     * runs with `debug: true`, so an error `safe()` swallows is logged rather
+     * than lost; it is collected here instead of printed, and reported only
+     * when a test is about to fail.
+     * @type {string[]}
+     */
+    let logs = [];
+    /** @type {Pick<Console, "debug" | "log" | "warn" | "error">} */
+    const realConsole = {
+      debug: console.debug,
+      log: console.log,
+      warn: console.warn,
+      error: console.error,
+    };
+
+    beforeEach(() => {
+      logs = [];
+      for (const level of /** @type {const} */ (["debug", "log", "warn", "error"])) {
+        console[level] = (...args) => {
+          logs.push(`${level}: ${args.map((a) => (a instanceof Error ? a.stack : String(a))).join(" ")}`);
+        };
+      }
+    });
+
+    afterEach(() => Object.assign(console, realConsole));
+
+    /**
+     * Fail with the reason when an expected event is missing. "No events"
+     * on its own is undiagnosable: the SDK hides its failures by design, so
+     * the report carries what decides whether anything is recorded (consent,
+     * the page URL, persisted state) and every non-event log line.
+     * @param {any[]} captured
+     * @param {string[]} types
+     */
+    function expectEvents(captured, types) {
+      const missing = types.filter((t) => !captured.some((e) => e.event_type === t));
+      if (missing.length === 0) return;
+      const r = /** @type {any} */ (globalThis.revu);
+      /** @param {() => unknown} read */
+      const tryRead = (read) => {
+        try {
+          return read();
+        } catch (err) {
+          return `threw: ${err}`;
+        }
+      };
+      const report = {
+        captured: captured.map((e) => e.event_type),
+        hasOptedOut: tryRead(() => r?.hasOptedOut?.()),
+        consent: tryRead(() => r?.consent?.get?.()),
+        location: tryRead(() => location.href),
+        storageKeys: tryRead(() => Object.keys(localStorage)),
+        cookie: tryRead(() => document.cookie),
+        logs: logs.filter((l) => !l.startsWith("debug: [REVU] event")),
+      };
+      throw new Error(`missing ${missing.join(", ")}\n${JSON.stringify(report, null, 2)}`);
+    }
 
     /**
      * Evaluate the bundle in the current global scope. The IIFE wrapper
@@ -150,6 +209,7 @@ describe.skipIf(!bundleAvailable)(
       expect(() =>
         r.init({
           apiKey: "test_smoke",
+        debug: true,
           host: "https://example.invalid",
           // Autocapture must stay on so the initial $pageview fires;
           // attention + web vitals stay off to keep the captured list
@@ -161,6 +221,7 @@ describe.skipIf(!bundleAvailable)(
         })
       ).not.toThrow();
       // At minimum, the initial $pageview should have fired.
+      expectEvents(captured, ["$pageview"]);
       const pv = captured.find((e) => e.event_type === "$pageview");
       expect(pv).toBeDefined();
       expect(typeof pv.event_id).toBe("string");
@@ -176,6 +237,7 @@ describe.skipIf(!bundleAvailable)(
       const r = /** @type {any} */ (globalThis.revu);
       r.init({
         apiKey: "test_smoke",
+        debug: true,
         host: "https://example.invalid",
         autocapture: false,
         captureWebVitals: false,
@@ -184,6 +246,7 @@ describe.skipIf(!bundleAvailable)(
       });
       captured.length = 0; // discard the initial $pageview
       r.capture("smoke_event", { ok: true, n: 42 });
+      expectEvents(captured, ["smoke_event"]);
       expect(captured).toHaveLength(1);
       const e = captured[0];
       expect(e.event_type).toBe("smoke_event");
@@ -202,6 +265,7 @@ describe.skipIf(!bundleAvailable)(
             "init",
             {
               apiKey: "test_smoke",
+        debug: true,
               host: "https://example.invalid",
               // Autocapture on so the queued init's $pageview fires.
               autocapture: true,
@@ -220,6 +284,7 @@ describe.skipIf(!bundleAvailable)(
       // The queued init should have brought the SDK online (so $pageview
       // fires) and the queued capture should have flowed through. The
       // queued identify should have emitted an $identify event.
+      expectEvents(captured, ["$pageview", "early_event", "$identify"]);
       const pv = captured.find((e) => e.event_type === "$pageview");
       const early = captured.find((e) => e.event_type === "early_event");
       const identify = captured.find((e) => e.event_type === "$identify");
@@ -260,6 +325,7 @@ describe.skipIf(!bundleAvailable)(
       const stub = /** @type {any} */ (globalThis.revu);
       stub.init({
         apiKey: "test_smoke",
+        debug: true,
         host: "https://example.invalid",
         autocapture: true,
         captureWebVitals: false,
@@ -281,6 +347,7 @@ describe.skipIf(!bundleAvailable)(
       // Each queued call should have replayed against the real client in
       // arrival order. Init brings the SDK online (so $pageview fires),
       // identify emits $identify, capture emits the custom event.
+      expectEvents(captured, ["$pageview", "$identify", "proxy_event"]);
       const pv = captured.find((e) => e.event_type === "$pageview");
       const identify = captured.find((e) => e.event_type === "$identify");
       const customEvent = captured.find((e) => e.event_type === "proxy_event");
