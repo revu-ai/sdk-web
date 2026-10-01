@@ -205,21 +205,32 @@ identity stores:
 revu.optOut();
 // Keep `revu_consent` so the opt-out itself is honored on the next load.
 const keys = [
-  "revu_event_queue",
   "revu_anonymous_id",
   "revu_user_id",
   "revu_session_id",
   "revu_session_last_seen",
+  "revu_session_started_at",
   "revu_attribution_first",
   "revu_attribution_last",
 ];
 try {
+  // The queue is an index (`revu_event_queue`) plus numbered chunks
+  // (`revu_event_queue.0`, `.1`, ...) that hold the events themselves.
+  // Removing the index alone would leave every buffered event behind.
+  for (let i = localStorage.length - 1; i >= 0; i--) {
+    const key = localStorage.key(i);
+    if (key && key.startsWith("revu_event_queue")) localStorage.removeItem(key);
+  }
   for (const key of keys) localStorage.removeItem(key);
 } catch {}
 for (const key of keys) {
+  // If you set `cookieDomain`, add `; Domain=<that value>` here too.
   document.cookie = `${key}=; Path=/; Max-Age=0; SameSite=Lax`;
 }
 ```
+
+This clears what is stored. Events the open page already holds in memory
+still flush as described above.
 
 A server-side right-to-be-forgotten helper that also purges already-ingested
 events is planned; until then, the above fully disables capture and clears
