@@ -55,12 +55,16 @@ browser before any request leaves the page.
 Symptom: the terminal `$page_leave` and `$web_vital` events do not
 arrive when a tab is closed or navigated away from. Things to check:
 
-- **SDK version.** Releases before this one sent the terminal batch
-  with `sendBeacon` and an `application/json` body. That combination is
-  not CORS-safelisted, so cross-origin the request needed a preflight
-  and was dropped, and the events were discarded along with it. The SDK
-  now uses `fetch` with `keepalive`, which does survive an unload.
-  Upgrading is the fix.
+- **SDK version.** Releases before 0.4.0 sent the terminal batch with
+  `sendBeacon` and an `application/json` body. That combination is not
+  CORS-safelisted, so cross-origin it needs a preflight, and in some
+  conditions (reproduced on a page with no recent request to the ingest
+  host) the browser dropped it and the events went with it. Most
+  terminal batches still arrived, so on those releases expect an
+  occasional missing `$page_leave` or vitals report, not a missing event
+  type. 0.4.0 and later send with `fetch` and `keepalive`, keep the
+  batch queued until delivery is confirmed, and resend it on the next
+  page load otherwise. Upgrading is the fix.
 - **Cross-origin and CSP.** The terminal request honors `connect-src`
   just like any other. See the section above.
 - **A very large final batch.** A `keepalive` request has a body limit
