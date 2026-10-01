@@ -35,7 +35,9 @@
     "./vitals": {
       "types": "./dist/plugins/vitals.d.ts",
       "import": "./dist/plugins/vitals.js"
-    }
+    },
+    "./iife": "./dist/iife/index.js",
+    "./iife.map": "./dist/iife/index.js.map"
   },
   "unpkg": "./dist/iife/index.js",
   "jsdelivr": "./dist/iife/index.js",

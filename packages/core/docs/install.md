@@ -1,6 +1,6 @@
 # Install
 
-Two paths, pick the one that matches how your site is built.
+Three paths, pick the one that matches how your site is built.
 
 ## Path 1: CDN snippet
 
@@ -104,6 +104,39 @@ for the modules they do not reach.
 
 The CDN bundle and the npm bundle ship the same source, the same public
 API, and the same wire shape. Pick whichever fits your build.
+
+## Path 3: npm install, self-host the script
+
+For a site that loads scripts only from its own origin (for example a
+CSP of `script-src 'self'`) but wants the `<script>` install, take the
+script build from npm and serve it yourself. Your lockfile then pins and
+integrity-checks the file.
+
+```bash
+npm install --save-exact @revu-ai/core
+```
+
+The script build is exported as `@revu-ai/core/iife`, and its source map
+as `@revu-ai/core/iife.map`. Resolve them by name rather than by path
+inside the package, so a change to the package's internal layout cannot
+break your copy step:
+
+```js
+import { copyFileSync } from "node:fs";
+import { createRequire } from "node:module";
+
+const require = createRequire(import.meta.url);
+copyFileSync(require.resolve("@revu-ai/core/iife"), "public/revu.js");
+copyFileSync(require.resolve("@revu-ai/core/iife.map"), "public/revu.js.map");
+```
+
+Then use the Path 1 snippet with `src="/revu.js"`.
+
+The file ends with a `sourceMappingURL` comment (and a `debugId`
+comment). Either serve the map next to the script under the name the
+comment gives (`index.js.map`, or rename the comment along with the
+file), or strip both comments. Otherwise DevTools requests a map that
+does not exist, and a strict `connect-src` reports that request.
 
 ## What the bundle does not do
 

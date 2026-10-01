@@ -142,7 +142,9 @@ build is a static asset, so you can serve it from your own domain (or
 keep loading it from `cdn.revu.ai`). If you self-host, pin a version and
 update deliberately rather than tracking latest, so a capture change
 never ships to your users without your say-so. See
-[Install](./install.md) for version pinning and SRI.
+[Install](./install.md) for version pinning and SRI, and
+[npm install, self-host the script](./install.md#path-3-npm-install-self-host-the-script)
+to take the file from npm.
 
 ## Notes
 
