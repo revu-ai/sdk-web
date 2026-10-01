@@ -34,11 +34,21 @@ single `connect-src` entry covers every path.
 ## The request returns 403
 
 Symptom: the network panel shows a POST to `/v1/behavior/events` that
-returns `403`. The key is valid but the request `Origin` is not on that
-key's allowed-origin list, so ingest rejects it. Add your site's origin
-(for example `https://app.example.com`) to the allowed origins for the
-key. This is distinct from a CSP block, which fails inside the browser
-before any request leaves the page.
+returns `403`. The key is valid but ingest refused the request `Origin`.
+The reason in the response body names which of two checks failed:
+
+- **The origin belongs to another environment.** This is the more common
+  cause. Each key accepts its environment's domain and its subdomains (the
+  development key also accepts `localhost`). When domains overlap, the most
+  specific one wins, so a production key is refused on a subdomain set as
+  the staging or development domain. Ship that environment's key on that
+  deploy.
+- **The origin is not on the key's allowed-origin list.** When a key has
+  one, add your site's origin (for example `https://app.example.com`) to
+  it.
+
+Either way this is distinct from a CSP block, which fails inside the
+browser before any request leaves the page.
 
 ## The final batch does not arrive on tab close
 
