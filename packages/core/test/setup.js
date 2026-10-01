@@ -11,7 +11,15 @@ import { GlobalRegistrator } from "@happy-dom/global-registrator";
 // `register()` is not idempotent; guard so re-preloads (worker reuse, etc.)
 // do not throw or stack windows on top of each other.
 if (typeof globalThis.window === "undefined") {
-  GlobalRegistrator.register({ url: "http://localhost/" });
+  // Main-frame navigation off: happy-dom otherwise follows a clicked link
+  // and moves `location` to its URL for every test that runs after it, so a
+  // same-origin check (outbound links) depended on test order.
+  GlobalRegistrator.register({
+    url: "http://localhost/",
+    settings: {
+      navigation: { disableMainFrameNavigation: true, disableFallbackToSetURL: true },
+    },
+  });
 }
 
 // Hermetic network. happy-dom's `fetch` performs real outbound I/O, and a

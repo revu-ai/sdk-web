@@ -12,10 +12,9 @@
  *      It is imported by `iife.js` and by these tests directly so the
  *      drain logic can be exercised in isolation with mock targets.
  *
- * Test order matters: the first test asserts the post-import state of
- * `globalThis.revu` BEFORE later tests overwrite it with mocks. Bun runs
- * tests in source order within a file, so the layout below is the
- * authoritative one.
+ * The post-import singleton is read once at import time, so the later
+ * tests that overwrite `globalThis.revu` with mocks cannot affect it, in any
+ * test order.
  */
 
 import { describe, expect, test } from "bun:test";
@@ -26,10 +25,13 @@ import { describe, expect, test } from "bun:test";
 import "../src/iife.js";
 import { bootIife } from "../src/iife-boot.js";
 
+// Read once, before any test below replaces `globalThis.revu` with a mock.
+const installed = globalThis.revu;
+
 describe("IIFE entry - module side effect on import", () => {
   test("installs the real revu singleton on globalThis.revu", () => {
-    expect(globalThis.revu).toBeDefined();
-    const r = /** @type {Record<string, unknown>} */ (globalThis.revu);
+    expect(installed).toBeDefined();
+    const r = /** @type {Record<string, unknown>} */ (installed);
     expect(typeof r.init).toBe("function");
     expect(typeof r.capture).toBe("function");
     expect(typeof r.identify).toBe("function");
