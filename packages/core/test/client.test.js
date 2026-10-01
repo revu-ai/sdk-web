@@ -519,6 +519,35 @@ describe("RevuClient > plugins", () => {
     expect(e?.properties.foo).toBe("bar");
   });
 
+  test("context.plugins names the installed plugins, from the first $pageview", () => {
+    /** @type {import("../src/types.js").RevuEvent[]} */
+    const events = [];
+    const client = new RevuClient({
+      apiKey: "revu_pk_test_1234567890",
+      host: "https://api.test",
+      autocapture: true,
+      flushAt: 10_000,
+      flushIntervalMs: 60_000,
+      maxBatch: 50,
+      maxQueue: 1000,
+      onEvent: (e) => events.push(e),
+    });
+    client.use({ name: "broken", install() { throw new Error("boom"); } });
+    client.use(makePlugin("web-vitals").plugin);
+    client.start();
+    client.use(makePlugin("late").plugin);
+    client.capture("after");
+    expect(events.find((e) => e.event_type === "$pageview")?.context.plugins).toBe("web-vitals");
+    expect(events.find((e) => e.event_type === "after")?.context.plugins).toBe("web-vitals,late");
+  });
+
+  test("context.plugins is absent when no plugin is installed", () => {
+    const { client, events } = makeClient();
+    client.start();
+    client.capture("x");
+    expect("plugins" in (events.find((e) => e.event_type === "x")?.context ?? {})).toBe(false);
+  });
+
   test("plugins see the same identity object the client uses", () => {
     const { client } = makeClient();
     /** @type {import("../src/types.js").PluginApi|null} */

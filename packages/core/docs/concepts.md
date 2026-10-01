@@ -231,7 +231,9 @@ shape:
   `ua_mobile` / `ua_platform` when it exposes the low-entropy
   [User-Agent Client Hints](./privacy.md#environment-signals),
   `webdriver` when it reports automation, `gpc` when the browser
-  advertises a Global Privacy Control signal, and the
+  advertises a Global Privacy Control signal, `plugins` (the installed
+  [plugins](./plugins.md), comma-separated, for example `"web-vitals"`)
+  when any are installed, and the
   [attribution](#attribution-first-touch-and-last-touch) fields
   (`initial_utm_*` / `utm_*` and friends) when a visitor arrived from a
   campaign. The example above shows a representative subset.

@@ -36,7 +36,7 @@ with no change on your side.
 /** @type {import("@revu-ai/core").RevuPlugin} */
 export function myPlugin(options = {}) {
   return {
-    name: "my-plugin", // unique id; double-install is a no-op
+    name: "my-plugin", // unique id; double-install is a no-op; listed in context.plugins
     install({ record, identity, context, config }) {
       // Wire listeners, observers, timers. Emit through `record()` so
       // events go through the standard pipeline (identity + context +

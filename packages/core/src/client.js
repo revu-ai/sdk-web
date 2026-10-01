@@ -121,10 +121,12 @@ export class RevuClient {
     // Attention starts before capture so the engagement clock is already
     // ticking when the initial $pageview fires.
     this.attention.start();
-    if (this.config.autocapture) this.autocapture.start();
+    // Plugins install before autocapture so the initial $pageview already
+    // carries `context.plugins`.
     for (const plugin of this._plugins) {
       if (!this._installed.has(plugin.name)) this._installPlugin(plugin);
     }
+    if (this.config.autocapture) this.autocapture.start();
     // Install the terminal pagehide flush LAST so it runs after every
     // emit-on-pagehide listener registered above (autocapture's
     // `$page_leave`, the vitals plugin's CLS / INP report, any plugin doing
@@ -179,6 +181,9 @@ export class RevuClient {
         config: this.config,
       });
       this._installed.add(plugin.name);
+      // `context.plugins`, comma-separated, lets the server tell "plugin not
+      // installed" from "nothing observed". A string, so events share it safely.
+      this.context.session.plugins = [...this._installed].join();
     } catch (err) {
       if (this.config.debug) {
         console.error(`[REVU] plugin "${plugin.name}" failed to install`, err);
