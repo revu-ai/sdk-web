@@ -4,13 +4,23 @@ All notable changes to `@revu-ai/core` are documented here.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.5.0] - 2026-10-02
+
+Let a site remove what the SDK keeps in the browser when a visitor withdraws consent, tell the server which plugins are installed, and make the `<script>` build installable from npm by name.
 
 ### Added
 
 - **`@revu-ai/core/local-data`.** A plugin that removes what the SDK stores in the browser, for a visitor who withdraws consent: `clear()` drops every queued event in memory and in storage, removes the identity ids and attribution records, rotates the ids held in memory, and keeps the consent record so the opt-out survives the next load. Under 0.5 kB brotli, opt-in, not in the `<script>` build. Plugins now also receive `queue` and `attribution` at install, for plugins that manage local data.
-- **`context.plugins`.** The names of the installed plugins, comma-separated (for example `"web-vitals"`), stamped on every event from the first `$pageview`, and absent when none is installed. With Web Vitals opt-in, a session without `$web_vital` events could mean the plugin is not installed or that no vital was observed; this tells the two apart. Plugins now install before autocapture starts so the initial `$pageview` carries it.
+- **`context.plugins`.** The names of the installed plugins, comma-separated (for example `"web-vitals"`), stamped on every event from the first `$pageview`, and absent when none is installed. With Web Vitals opt-in, a session without `$web_vital` events could mean the plugin is not installed or that no vital was observed; this tells the two apart.
 - **`@revu-ai/core/iife` and `@revu-ai/core/iife.map`.** The `<script>` build and its source map are exported by name, so a site that installs from npm and serves the script from its own origin can resolve the file without depending on the package's internal layout. See Install, "npm install, self-host the script".
+
+### Changed
+
+- **Plugins install before autocapture starts.** Registered plugins used to install after autocapture, so the initial `$pageview` went out before any plugin was listed in `context.plugins`. They install first now. The terminal flush is still wired last, after every plugin's page-hide listener.
+
+### Size
+
+- **Bundle size: 9.38 kB brotli on the wire / 10.44 kB gzipped / 34.13 kB minified**, plus 0.83 kB brotli for the vitals plugin and 0.40 kB for the local-data plugin if you import them. The `<script>` bundle, which includes the vitals plugin, is 9.98 kB brotli.
 
 ## [0.4.0] - 2026-09-23
 
@@ -147,6 +157,8 @@ First public release. Lean capture core for web behavioral analytics: one-line i
 - Consent is enforced before an event is built (a denied `analytics` category produces no event); Global Privacy Control is honored when `honorGpc` is set.
 - The transport sends only fields explicitly built by the client; no DOM serialization, no cookie reads other than the SDK's own first-party identity cookie.
 
+[0.5.0]: https://github.com/revu-ai/sdk-web/releases/tag/v0.5.0
+[0.4.0]: https://github.com/revu-ai/sdk-web/releases/tag/v0.4.0
 [0.3.0]: https://github.com/revu-ai/sdk-web/releases/tag/v0.3.0
 [0.2.0]: https://github.com/revu-ai/sdk-web/releases/tag/v0.2.0
 [0.1.0]: https://github.com/revu-ai/sdk-web/releases/tag/v0.1.0
