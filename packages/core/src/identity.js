@@ -44,6 +44,13 @@ const USER_KEY = "revu_user_id";
 const SESSION_KEY = "revu_session_id";
 const SESSION_SEEN_KEY = "revu_session_last_seen";
 const SESSION_START_KEY = "revu_session_started_at";
+
+/**
+ * Every key the identity layer persists, for code that has to remove them
+ * all (the `@revu-ai/core/local-data` plugin). Unused by core itself, so it
+ * costs core nothing after tree-shaking.
+ */
+export const IDENTITY_KEYS = [ANON_KEY, USER_KEY, SESSION_KEY, SESSION_SEEN_KEY, SESSION_START_KEY];
 // `is_new_visitor` and `first_seen_at` are deliberately NOT stored or
 // stamped client-side. They are computed server-side from the
 // `behavior.visitors` rollup table where the API can keep them

@@ -81,6 +81,15 @@ await buildOne("vitals plugin", {
   ...common,
 });
 
+// Same reasoning for the local-data plugin: only a host that offers its
+// visitors a "delete my data" path loads it.
+await buildOne("local-data plugin", {
+  entrypoints: ["src/plugins/local-data.js"],
+  outdir: "dist/plugins",
+  format: "esm",
+  ...common,
+});
+
 await buildOne("iife", {
   entrypoints: ["src/iife.js"],
   outdir: "dist/iife",

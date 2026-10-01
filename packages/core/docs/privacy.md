@@ -198,8 +198,27 @@ mechanism under GDPR), so the decision is left to you.
 
 `optOut()` stops new capture but leaves events already queued under prior
 consent to flush. To also discard any locally-buffered events and stored
-ids for a user who withdraws consent, clear the durable queue and
-identity stores:
+ids for a user who withdraws consent, use the
+[`local-data` plugin](./plugins.md#revu-aicorelocal-data---remove-local-data)
+with an npm install:
+
+```js
+import localData from "@revu-ai/core/local-data";
+
+const data = localData();
+revu.init({ apiKey: "revu_pk_...", plugins: [data] });
+
+// When the visitor withdraws consent:
+revu.optOut();
+data.clear();
+```
+
+It drops the queued events in memory and in storage, removes the ids and
+attribution records, and keeps `revu_consent` so the opt-out survives the
+next load.
+
+With the `<script>` install, which does not include the plugin, clear the
+durable queue and identity stores yourself:
 
 ```js
 revu.optOut();

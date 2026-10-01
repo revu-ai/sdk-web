@@ -95,6 +95,8 @@
  * @property {import("./identity.js").Identity} identity  Read-only access to the current ids.
  * @property {import("./context.js").Context} context     Read-only access to the environment context builder.
  * @property {ResolvedConfig} config        Read-only access to the resolved config.
+ * @property {import("./queue.js").PersistentQueue} queue  The durable event queue. For plugins that manage local data (`@revu-ai/core/local-data`); emit through `record`, never by adding to the queue directly.
+ * @property {import("./attribution.js").Attribution} attribution  The visitor's first- and last-touch attribution records.
  */
 
 /**

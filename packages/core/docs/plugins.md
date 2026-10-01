@@ -30,6 +30,31 @@ import to make and cannot tree-shake, so the CDN bundle registers the
 plugin itself. If you install from `cdn.revu.ai`, vitals are reported
 with no change on your side.
 
+### `@revu-ai/core/local-data` - Remove local data
+
+Removes what the SDK stores in the visitor's browser: every queued event
+(in memory and in storage), the identity ids and the attribution records.
+It keeps the consent record, so an opt-out is still honored on the next
+load. Use it when a visitor withdraws consent and asks for their data to
+go with it. See [Dropping locally-buffered events](./privacy.md#dropping-locally-buffered-events).
+
+```js
+import revu from "@revu-ai/core";
+import localData from "@revu-ai/core/local-data";
+
+const data = localData();
+revu.init({ apiKey: "revu_pk_...", plugins: [data] });
+
+// When the visitor withdraws consent:
+revu.optOut();
+data.clear();
+```
+
+`clear()` also rotates the ids held in memory, so if the visitor opts
+back in on the same page, nothing recorded afterwards links to the data
+that was removed. It costs under 0.5 kB brotli, and it is not part of the
+`<script>` install.
+
 ## The contract
 
 ```js
@@ -58,6 +83,9 @@ The `install` API is the minimum a plugin needs:
 - **`identity`** for read access to `anonymousId`, `userId`, `sessionId`.
 - **`context`** for read access to the environment context builder.
 - **`config`** for the resolved config (host, environment, debug, etc).
+- **`queue`** and **`attribution`** for plugins that manage local data,
+  like `local-data`. Emit through `record()`; never add to the queue
+  directly.
 
 ## Registering a plugin
 

@@ -8,6 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- **`@revu-ai/core/local-data`.** A plugin that removes what the SDK stores in the browser, for a visitor who withdraws consent: `clear()` drops every queued event in memory and in storage, removes the identity ids and attribution records, rotates the ids held in memory, and keeps the consent record so the opt-out survives the next load. Under 0.5 kB brotli, opt-in, not in the `<script>` build. Plugins now also receive `queue` and `attribution` at install, for plugins that manage local data.
 - **`context.plugins`.** The names of the installed plugins, comma-separated (for example `"web-vitals"`), stamped on every event from the first `$pageview`, and absent when none is installed. With Web Vitals opt-in, a session without `$web_vital` events could mean the plugin is not installed or that no vital was observed; this tells the two apart. Plugins now install before autocapture starts so the initial `$pageview` carries it.
 - **`@revu-ai/core/iife` and `@revu-ai/core/iife.map`.** The `<script>` build and its source map are exported by name, so a site that installs from npm and serves the script from its own origin can resolve the file without depending on the package's internal layout. See Install, "npm install, self-host the script".
 

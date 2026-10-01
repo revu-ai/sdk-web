@@ -179,6 +179,8 @@ export class RevuClient {
         identity: this.identity,
         context: this.context,
         config: this.config,
+        queue: this.transport.queue,
+        attribution: this.attribution,
       });
       this._installed.add(plugin.name);
       // `context.plugins`, comma-separated, lets the server tell "plugin not

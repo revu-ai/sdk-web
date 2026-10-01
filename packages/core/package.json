@@ -36,6 +36,10 @@
       "types": "./dist/plugins/vitals.d.ts",
       "import": "./dist/plugins/vitals.js"
     },
+    "./local-data": {
+      "types": "./dist/plugins/local-data.d.ts",
+      "import": "./dist/plugins/local-data.js"
+    },
     "./iife": "./dist/iife/index.js",
     "./iife.map": "./dist/iife/index.js.map"
   },

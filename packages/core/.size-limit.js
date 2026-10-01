@@ -107,4 +107,12 @@ export default [
     gzip: false,
     disablePlugins: ["@size-limit/esbuild"],
   },
+  {
+    name: "plugin: local-data (brotli, opt-in cost)",
+    path: "dist/plugins/local-data.js",
+    limit: kb(PLUGIN_BUDGET_KB),
+    brotli: true,
+    gzip: false,
+    disablePlugins: ["@size-limit/esbuild"],
+  },
 ];
