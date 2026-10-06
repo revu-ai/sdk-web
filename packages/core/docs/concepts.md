@@ -381,7 +381,7 @@ envelope above; the rows below describe what's distinctive about each.
 
 | Event | Fires when | Notable properties |
 |---|---|---|
-| `$pageview` | First load and on every SPA route change | `url`, `path`, `referrer`, `title` |
+| `$pageview` | First load and on every SPA route change | `url`, `path`, `referrer`, `title`, `description` (the page's `<meta name="description">` when the page view is recorded, whitespace collapsed, at most 300 characters, absent when missing or empty) |
 | `$page_leave` | SPA route change, tab close, navigation, or `visibilitychange -> hidden` | `path` (the page being left), `trigger` (`"navigation"` / `"hidden"` / `"pagehide"`), `engagement_time_ms`, `max_scroll_percent`, `final_scroll_percent`, `persisted` |
 | `$page_restore` | `pageshow` with `persisted: true` (bfcache restore via Back button) | `path` |
 | `$tab_hidden` / `$tab_visible` | Visibility flips | `visible_ms` / `hidden_ms` |

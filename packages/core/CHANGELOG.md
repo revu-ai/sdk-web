@@ -6,10 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [0.6.0] - 2026-10-07
 
-Credit each click to the element it acts on, name form fields by their labels, stop counting a text selection as a rage click, and capture more campaign and click ids.
+Credit each click to the element it acts on, name form fields by their labels, stop counting a text selection as a rage click, carry the page's meta description on each page view, and capture more campaign and click ids.
 
 ### Added
 
+- **`$pageview` carries `description`.** The `content` of the page's `<meta name="description">` when the page view is recorded, so a single-page route that rewrites it is read fresh: whitespace collapsed, at most 300 characters, absent when the tag is missing or empty. A search result shows a page's title and description, and a description set by script exists only once the page renders, so it is read in the browser.
 - **More campaign and click ids in attribution.** `utm_id` and the click ids `msclkid`, `ttclid`, `twclid` and `li_fat_id` are captured alongside the existing `utm_*`, `gclid` and `fbclid`, first touch as `context.initial_<key>` and last touch as `context.<key>`, so the campaign an ad account tags in the landing link can be joined to the visit it brought.
 - **`fingerprint.interactive` and `fingerprint.target_part`.** `interactive` is `false` when nothing interactive encloses the node a click hit, for example a tap on a chart: the tap did nothing the page declared, so it signals confusion rather than use of a feature. `target_part` names the node actually hit (for example `svg.spark`) when it sits inside the element the fingerprint describes.
 
@@ -21,7 +22,7 @@ Credit each click to the element it acts on, name form fields by their labels, s
 
 ### Size
 
-- **Bundle size: 9.64 kB brotli on the wire / 10.71 kB gzipped / 34.96 kB minified**, plus 0.83 kB brotli for the vitals plugin and 0.40 kB for the local-data plugin if you import them. The `<script>` bundle, which includes the vitals plugin, is 10.24 kB brotli; its budget is now 10.25 kB.
+- **Bundle size: 9.70 kB brotli on the wire / 10.78 kB gzipped / 35.15 kB minified**, plus 0.83 kB brotli for the vitals plugin and 0.40 kB for the local-data plugin if you import them. The `<script>` bundle, which includes the vitals plugin, is 10.28 kB brotli; its budget is now 10.3 kB.
 
 ## [0.5.0] - 2026-10-02
 
