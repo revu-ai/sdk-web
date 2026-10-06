@@ -8,8 +8,9 @@
  * what a visitor actually downloads. The North Star commits the SDK to a
  * cold load in single-digit kilobytes. The npm core keeps that promise; the
  * `<script>` bundle, which also carries the Web Vitals plugin, was given
- * 10.3 kB so a click is credited to the element it acts on, form fields are
- * named, and a page view carries the page's meta description. The budget is not a preference: it is the promise, written down
+ * 10.5 kB so a click is credited to the element it acts on (including
+ * controls made clickable in script), form fields are named, and a page view
+ * carries the page's meta description. The budget is not a preference: it is the promise, written down
  * where CI can enforce it.
  *
  * The other two gates are derived so that neither can be nudged on its own.
@@ -25,7 +26,7 @@
  * decision, not a build fix.
  * @type {number}
  */
-const WIRE_BUDGET_KB = 10.3;
+const WIRE_BUDGET_KB = 10.5;
 
 /**
  * gzip allowance as a multiple of the brotli budget. gzip is the fallback
