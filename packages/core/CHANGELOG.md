@@ -4,7 +4,9 @@ All notable changes to `@revu-ai/core` are documented here.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.6.0] - 2026-10-06
+
+Credit each click to the element it acts on, name form fields by their labels, stop counting a text selection as a rage click, and capture more campaign and click ids.
 
 ### Added
 
@@ -19,7 +21,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Size
 
-- **The `<script>` bundle, which includes the Web Vitals plugin, is 10.23 kB brotli; its budget is now 10.25 kB.** The npm core is 9.65 kB.
+- **Bundle size: 9.64 kB brotli on the wire / 10.71 kB gzipped / 34.96 kB minified**, plus 0.83 kB brotli for the vitals plugin and 0.40 kB for the local-data plugin if you import them. The `<script>` bundle, which includes the vitals plugin, is 10.24 kB brotli; its budget is now 10.25 kB.
 
 ## [0.5.0] - 2026-10-02
 
