@@ -277,11 +277,14 @@ present:
 - **First touch** (`context.initial_*`) is written once and never
   overwritten: the campaign that originally acquired the visitor. Fields:
   `initial_utm_source`, `initial_utm_medium`, `initial_utm_campaign`,
-  `initial_utm_term`, `initial_utm_content`, `initial_gclid`,
-  `initial_fbclid`, plus `initial_landing_path` and `initial_seen_at`
+  `initial_utm_term`, `initial_utm_content`, `initial_utm_id`,
+  `initial_gclid`, `initial_fbclid`, `initial_msclkid`, `initial_ttclid`,
+  `initial_twclid`, `initial_li_fat_id`, plus `initial_landing_path` and
+  `initial_seen_at`
   (recorded even for a direct first visit).
 - **Last touch** (`context.utm_source`, `utm_medium`, `utm_campaign`,
-  `utm_term`, `utm_content`, `gclid`, `fbclid`) is rewritten whenever
+  `utm_term`, `utm_content`, `utm_id`, `gclid`, `fbclid`, `msclkid`,
+  `ttclid`, `twclid`, `li_fat_id`) is rewritten whenever
   a new touch occurs - a landing that carries campaign params or arrives
   from an external referrer. Internal navigation does not overwrite it.
 

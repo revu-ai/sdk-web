@@ -18,8 +18,8 @@
  *     Internal navigation does not overwrite it.
  *
  * Emitted into the event's `context` bucket (only the keys actually present):
- * first touch as `initial_*`, last touch as the bare `utm_*` / `gclid` /
- * `fbclid` convention used across the analytics space.
+ * first touch as `initial_*`, last touch under the bare query key
+ * (`utm_*` and the ad platforms' click ids).
  *
  * Reading the known, stable `utm_*` / click-id keys via URLSearchParams is
  * cheap and never drifts, so this does not cross the "no parsers shipped to
@@ -40,6 +40,11 @@ const PARAM_KEYS = [
   "utm_content",
   "gclid",
   "fbclid",
+  "utm_id",
+  "msclkid",
+  "ttclid",
+  "twclid",
+  "li_fat_id",
 ];
 
 /**
@@ -101,7 +106,7 @@ export class Attribution {
     }
     if (first.landing_path != null) props.initial_landing_path = first.landing_path;
     if (first.at != null) props.initial_seen_at = first.at;
-    // Last touch under the bare `utm_*` / `gclid` / `fbclid` convention.
+    // Last touch under the bare query key.
     for (const key of PARAM_KEYS) {
       if (last[key] != null) props[key] = last[key];
     }

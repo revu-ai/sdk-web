@@ -8,6 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- **More campaign and click ids in attribution.** `utm_id` and the click ids `msclkid`, `ttclid`, `twclid` and `li_fat_id` are captured alongside the existing `utm_*`, `gclid` and `fbclid`, first touch as `context.initial_<key>` and last touch as `context.<key>`, so the campaign an ad account tags in the landing link can be joined to the visit it brought.
 - **`fingerprint.interactive` and `fingerprint.target_part`.** `interactive` is `false` when nothing interactive encloses the node a click hit, for example a tap on a chart: the tap did nothing the page declared, so it signals confusion rather than use of a feature. `target_part` names the node actually hit (for example `svg.spark`) when it sits inside the element the fingerprint describes.
 
 ### Changed
@@ -18,7 +19,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Size
 
-- **The `<script>` bundle, which includes the Web Vitals plugin, is 10.21 kB brotli; its budget is now 10.25 kB.** The npm core is 9.63 kB.
+- **The `<script>` bundle, which includes the Web Vitals plugin, is 10.23 kB brotli; its budget is now 10.25 kB.** The npm core is 9.65 kB.
 
 ## [0.5.0] - 2026-10-02
 

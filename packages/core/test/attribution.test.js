@@ -86,6 +86,20 @@ describe("Attribution > last touch", () => {
     expect(props.fbclid).toBe("xyz");
   });
 
+  test("captures utm_id and every supported click id, first and last touch", () => {
+    history.replaceState(
+      {},
+      "",
+      "/?utm_id=cmp-42&gclid=g&fbclid=f&msclkid=m&ttclid=t&twclid=x&li_fat_id=l",
+    );
+    const props = new Attribution({ storage: memoryStorage() }).properties();
+    const expected = { utm_id: "cmp-42", gclid: "g", fbclid: "f", msclkid: "m", ttclid: "t", twclid: "x", li_fat_id: "l" };
+    for (const [key, value] of Object.entries(expected)) {
+      expect(props[key]).toBe(value);
+      expect(props[`initial_${key}`]).toBe(value);
+    }
+  });
+
   test("updates on a new campaign touch, leaving first touch intact", () => {
     const store = memoryStorage();
     history.replaceState({}, "", "/?utm_source=alpha");

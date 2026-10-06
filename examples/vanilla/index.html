@@ -283,16 +283,14 @@
     // Mirror the consent / GPC / attribution fields off the latest event's
     // context bucket into a live panel so they're visible without the console.
     const engineState = document.getElementById("engine-state");
+    const CLICK_IDS = ["gclid", "fbclid", "msclkid", "ttclid", "twclid", "li_fat_id"];
     function renderEngineState(context) {
       const attribution = {};
       for (const key of Object.keys(context)) {
         if (
           key.startsWith("initial_utm") ||
           key.startsWith("utm_") ||
-          key === "gclid" ||
-          key === "fbclid" ||
-          key === "initial_gclid" ||
-          key === "initial_fbclid" ||
+          CLICK_IDS.includes(key.replace(/^initial_/, "")) ||
           key === "initial_landing_path" ||
           key === "initial_seen_at"
         ) {
