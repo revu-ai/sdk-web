@@ -274,7 +274,7 @@ export class Capture {
       properties: { path: routePath() },
     });
 
-    this._trackForRageClick(fp);
+    this._trackForRageClick(fp, el);
     this._classifyLinkClick(el);
   }
 
@@ -297,9 +297,14 @@ export class Capture {
    * Detect rage clicks: N clicks on the same element-ish in a short window.
    * Match by (tag, selector) instead of by node identity so a re-rendered
    * button (same selector, different DOM node) still counts.
+   *
+   * A burst that leaves text selected inside the clicked element is a
+   * double- or triple-click to select (to copy, say), not frustration, so it
+   * is not a rage click.
    * @param {import("./types.js").Fingerprint} fp
+   * @param {Element} el  The node clicked.
    */
-  _trackForRageClick(fp) {
+  _trackForRageClick(fp, el) {
     const now = Date.now();
     const key = (fp.tag || "") + "|" + (fp.selector || "");
     // Trim the sliding window.
@@ -309,7 +314,7 @@ export class Capture {
     // Emit exactly once at the threshold so a 5-click rage doesn't emit
     // three $rageclick events; the dashboard cares about the burst, not
     // the count growing past 3.
-    if (onSame === RAGE_CLICK_THRESHOLD) {
+    if (onSame === RAGE_CLICK_THRESHOLD && !selectsTextIn(el)) {
       this.emit("$rageclick", {
         fingerprint: fp,
         properties: {
@@ -664,6 +669,17 @@ function composedTarget(e) {
 function composedElement(e) {
   const t = composedTarget(e);
   return t && /** @type {Node} */ (t).nodeType === 1 ? /** @type {Element} */ (t) : null;
+}
+
+/**
+ * Whether the page has a non-empty text selection that starts inside `el`.
+ * @param {Element} el
+ * @returns {boolean}
+ */
+function selectsTextIn(el) {
+  // Only reached from a click handler, so `window` exists.
+  const sel = window.getSelection();
+  return !!sel && !sel.isCollapsed && el.contains(sel.anchorNode);
 }
 
 /**

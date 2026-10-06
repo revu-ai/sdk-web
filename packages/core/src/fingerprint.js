@@ -48,40 +48,121 @@ function parentAcrossShadow(node) {
 }
 
 /**
- * Build a fingerprint from a clicked element.
- *
- * Captures the visible text plus two accessibility labels - `aria-label` and
- * `title` - so the server's auto-derived feature catalog can fall back from
- * innerText to aria-label to title when naming a button. Icon-only buttons
- * (think GitHub's star button) have no visible text but always have one of
- * those labels; without them they would land in the catalog as "(unnamed
- * button)" and need manual curation.
- *
- * Sensitive targets get a redacted fingerprint (no text, no labels); see
- * {@link isSensitive}.
+ * What makes an element something a person acts on: native controls, ARIA
+ * widget roles, anything made focusable on purpose, and inline handlers.
+ * A click anywhere inside one of these acts on it, so it is the element the
+ * fingerprint describes. Handlers attached in script are invisible to the
+ * DOM, which is why `tabindex` and `onclick` are the only signals for a
+ * container made clickable by hand.
+ */
+const INTERACTIVE =
+  'a[href],button,input,select,textarea,label,summary,[contenteditable]:not([contenteditable="false"]),' +
+  "[role=button],[role=link],[role=menuitem],[role=tab],[role=checkbox],[role=radio],[role=switch],[role=option]," +
+  '[tabindex]:not([tabindex="-1"]),[onclick]';
+
+/**
+ * The nearest element (including `el` itself) a click on `el` acts on, or
+ * null when nothing interactive encloses it. Crosses Shadow DOM boundaries.
  * @param {Element} el
+ * @returns {Element|null}
+ */
+export function interactiveTarget(el) {
+  /** @type {Element|null} */
+  let node = el;
+  while (node && node.nodeType === 1) {
+    if (node.matches(INTERACTIVE)) return node;
+    node = parentAcrossShadow(node);
+  }
+  return null;
+}
+
+/**
+ * Build a fingerprint for an interaction on `clicked`.
+ *
+ * The fingerprint describes the element the interaction acts on, which is
+ * the nearest interactive ancestor (see {@link interactiveTarget}): a tap on
+ * the icon inside a link is a tap on the link, so it carries the link's text
+ * and selector. The node actually hit is kept as `target_part` when it
+ * differs. When nothing interactive encloses the node, the fingerprint
+ * describes the node itself and `interactive` is false: the tap did nothing
+ * the page declared, so it is a sign of confusion rather than feature use.
+ *
+ * Besides visible text it captures the accessible name (`aria_label`) and
+ * `title`, so the server can name controls without visible text: icon-only
+ * buttons, and form fields, which never yield text (see {@link nameOf}).
+ *
+ * Sensitive elements never yield text or value; a `data-revu-mask` region
+ * yields no labels either. See {@link isSensitive}.
+ * @param {Element} clicked
  * @returns {import("./types.js").Fingerprint}
  */
-export function fingerprint(el) {
-  const tag = el.tagName.toLowerCase();
-  const sensitive = isSensitive(el);
+export function fingerprint(clicked) {
+  const target = interactiveTarget(clicked);
+  const el = target || clicked;
   /** @type {import("./types.js").Fingerprint} */
   const fp = {
-    tag,
-    text: sensitive ? undefined : truncate(safeTextOf(el), 120),
+    tag: el.tagName.toLowerCase(),
+    text: truncate(safeTextOf(el), 120),
     role: el.getAttribute("role") || undefined,
     id: el.id || undefined,
     classes: el.classList.length ? Array.from(el.classList) : undefined,
     selector: selectorOf(el),
     ordinal: ordinalOf(el),
+    interactive: !!target,
   };
-  if (!sensitive) {
-    const ariaLabel = el.getAttribute("aria-label");
-    if (ariaLabel) fp.aria_label = truncate(ariaLabel, 120);
+  if (el !== clicked) fp.target_part = partOf(clicked);
+  if (!closestMask(el)) {
+    const name = nameOf(el);
+    if (name) fp.aria_label = truncate(name, 120);
     const title = el.getAttribute("title");
     if (title) fp.title = truncate(title, 120);
   }
   return fp;
+}
+
+/**
+ * The accessible name an element declares, in the order assistive
+ * technology reads it: `aria-labelledby`, then `aria-label`, then, for an
+ * element that takes a `<label>` (form fields and buttons), its `<label>`,
+ * `placeholder` and `name`. Every source is
+ * text the page author wrote; a field's value is never read, and a
+ * referenced label inside a sensitive subtree yields nothing.
+ * @param {Element} el
+ * @returns {string|undefined}
+ */
+function nameOf(el) {
+  const ids = el.getAttribute("aria-labelledby");
+  if (ids) {
+    const root = /** @type {Document|ShadowRoot} */ (el.getRootNode());
+    let text = "";
+    for (const id of ids.split(" ")) {
+      const ref = root.getElementById(id);
+      if (ref) text += ` ${safeTextOf(ref) || ""}`;
+    }
+    if ((text = text.trim())) return text;
+  }
+  const aria = el.getAttribute("aria-label");
+  if (aria) return aria;
+  const field = /** @type {HTMLInputElement} */ (el);
+  if (!field.labels) return undefined;
+  const label = field.labels[0];
+  return (
+    (label && safeTextOf(label)) ||
+    el.getAttribute("placeholder") ||
+    el.getAttribute("name") ||
+    undefined
+  );
+}
+
+/**
+ * Short description of the node a click actually hit, inside the element
+ * the fingerprint describes: its tag and first class (e.g. `svg.spark`).
+ * @param {Element} el
+ * @returns {string}
+ */
+function partOf(el) {
+  const first = el.classList.length ? `.${el.classList[0]}` : "";
+  return el.tagName.toLowerCase() + first;
 }
 
 /**

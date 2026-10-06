@@ -413,6 +413,43 @@ describe("Capture - rage click", () => {
     expect(events.filter((e) => e.type === "$rageclick")).toHaveLength(1);
   });
 
+  test("a triple-click that selects text is not a rage click", () => {
+    const p = document.createElement("p");
+    p.textContent = "Copy this address";
+    document.body.appendChild(p);
+
+    const { cap, events } = makeCapture();
+    cap.start();
+    events.length = 0;
+    p.click();
+    p.click();
+    const sel = /** @type {Selection} */ (window.getSelection());
+    sel.selectAllChildren(p);
+    p.click();
+    sel.removeAllRanges();
+
+    expect(events.filter((e) => e.type === "$autocapture")).toHaveLength(3);
+    expect(events.filter((e) => e.type === "$rageclick")).toHaveLength(0);
+  });
+
+  test("a selection elsewhere on the page does not hide a rage click", () => {
+    const p = document.createElement("p");
+    p.textContent = "Unrelated text";
+    const btn = document.createElement("button");
+    btn.id = "stuck";
+    document.body.append(p, btn);
+
+    const { cap, events } = makeCapture();
+    cap.start();
+    events.length = 0;
+    const sel = /** @type {Selection} */ (window.getSelection());
+    sel.selectAllChildren(p);
+    for (let i = 0; i < 3; i++) btn.click();
+    sel.removeAllRanges();
+
+    expect(events.filter((e) => e.type === "$rageclick")).toHaveLength(1);
+  });
+
   test("clicks on different elements do not aggregate into a rage", () => {
     const a = document.createElement("button");
     a.id = "a";
@@ -1249,12 +1286,9 @@ describe("Capture - autocapture element semantics", () => {
     expect(fp.aria_label.length).toBeLessThanOrEqual(123); // 120 + ellipsis budget
   });
 
-  test("clicking inside a sensitive input does not capture aria-label or title", () => {
-    // Defense in depth: even when a host annotates an <input> with a
-    // descriptive aria-label that is itself sensitive ("Credit card number"),
-    // the fingerprint must stay redacted to match the masking-at-source
-    // invariant. The visible-text test in the input-masking block already
-    // covers `text`; this pins the same for the two new label fields.
+  test("a form field carries its aria-label and title, never its value", () => {
+    // A field's labels are text the page author wrote, so they name the
+    // field; its value is what the visitor typed, so it never leaves.
     const input = document.createElement("input");
     input.type = "text";
     input.setAttribute("aria-label", "Credit card number");
@@ -1268,6 +1302,22 @@ describe("Capture - autocapture element semantics", () => {
 
     const fp = events.find((e) => e.type === "$autocapture")?.data.fingerprint;
     expect(fp.text).toBeUndefined();
+    expect(fp.aria_label).toBe("Credit card number");
+    expect(fp.title).toBe("Enter your full card number");
+    expect(JSON.stringify(fp)).not.toContain("4242");
+  });
+
+  test("data-revu-mask still removes a field's labels", () => {
+    const wrap = document.createElement("div");
+    wrap.setAttribute("data-revu-mask", "");
+    wrap.innerHTML = '<input aria-label="Account number" title="Yours">';
+    document.body.appendChild(wrap);
+
+    const { cap, events } = makeCapture();
+    cap.start();
+    /** @type {HTMLElement} */ (wrap.firstElementChild).click();
+
+    const fp = events.find((e) => e.type === "$autocapture")?.data.fingerprint;
     expect(fp.aria_label).toBeUndefined();
     expect(fp.title).toBeUndefined();
   });
@@ -1288,29 +1338,109 @@ describe("Capture - autocapture element semantics", () => {
     const fp = events.find((e) => e.type === "$autocapture")?.data.fingerprint;
     expect(fp.ordinal).toBe(1);
   });
+});
 
-  test("clicking the inner icon of a button still fingerprints the icon, not the parent", () => {
-    // The fingerprint module captures the click target verbatim; promoting
-    // to the containing button is a downstream concern (link classification
-    // walks anchors, but generic-element walks do not). This test pins the
-    // current contract so a refactor cannot silently change it.
-    const btn = document.createElement("button");
-    btn.id = "save";
-    const icon = document.createElement("span");
-    icon.className = "icon-save";
-    icon.textContent = "Save";
-    btn.appendChild(icon);
-    document.body.appendChild(btn);
-
+describe("Capture - click target and accessible name", () => {
+  /** @param {string} html @param {string} hit selector of the node to click */
+  function clickIn(html, hit) {
+    document.body.innerHTML = html;
     const { cap, events } = makeCapture();
     cap.start();
-    icon.click();
+    events.length = 0;
+    // SVG nodes have no .click(), so dispatch the event every node takes.
+    document.querySelector(hit)?.dispatchEvent(new MouseEvent("click", { bubbles: true, composed: true }));
+    return events.find((e) => e.type === "$autocapture")?.data.fingerprint;
+  }
 
-    const fp = events.find((e) => e.type === "$autocapture")?.data.fingerprint;
-    expect(fp.tag).toBe("span");
-    expect(fp.classes).toEqual(["icon-save"]);
-    // Selector walks ancestors up to the nearest id, so we still see "#save".
-    expect(fp.selector).toContain("#save");
+  test("a tap on a decorative svg inside a link is credited to the link", () => {
+    const fp = clickIn(
+      '<a class="tile" href="/gold"><svg class="spark" aria-hidden="true"><path></path></svg>Gold Pound</a>',
+      "path",
+    );
+    expect(fp.tag).toBe("a");
+    expect(fp.text).toBe("Gold Pound");
+    expect(fp.selector).toBe("html > body > a.tile");
+    expect(fp.interactive).toBe(true);
+    expect(fp.target_part).toBe("path");
+  });
+
+  test("text inside a button is credited to the button", () => {
+    const fp = clickIn('<button id="save"><span class="lbl">Save</span></button>', "span");
+    expect(fp.tag).toBe("button");
+    expect(fp.selector).toBe("#save");
+    expect(fp.target_part).toBe("span.lbl");
+  });
+
+  test("a container made focusable on purpose is interactive", () => {
+    const fp = clickIn('<div class="card" tabindex="0"><span>Plan A</span></div>', "span");
+    expect(fp.tag).toBe("div");
+    expect(fp.interactive).toBe(true);
+  });
+
+  test("a widget role makes an element interactive", () => {
+    const fp = clickIn('<div role="tab"><i class="ic"></i>Prices</div>', "i");
+    expect(fp.role).toBe("tab");
+    expect(fp.text).toBe("Prices");
+    expect(fp.target_part).toBe("i.ic");
+  });
+
+  test("a tap on a node nothing interactive encloses is flagged, not promoted", () => {
+    const fp = clickIn('<figure><svg><circle class="gfill"></circle></svg></figure>', "circle");
+    expect(fp.tag).toBe("circle");
+    expect(fp.interactive).toBe(false);
+    expect(fp.target_part).toBeUndefined();
+  });
+
+  test("an element hit directly carries no target_part", () => {
+    const fp = clickIn('<button id="go">Go</button>', "button");
+    expect(fp.interactive).toBe(true);
+    expect(fp.target_part).toBeUndefined();
+  });
+
+  test("a select is named by its aria-label", () => {
+    const fp = clickIn(
+      '<select class="calc-seller" aria-label="Choose a seller"><option>Private seller</option></select>',
+      "select",
+    );
+    expect(fp.aria_label).toBe("Choose a seller");
+    expect(fp.text).toBeUndefined();
+    expect(JSON.stringify(fp)).not.toContain("Private seller");
+  });
+
+  test("aria-labelledby wins over aria-label", () => {
+    const fp = clickIn(
+      '<h3 id="t">Amount</h3><span id="u">in EGP</span><input aria-labelledby="t u" aria-label="Other">',
+      "input",
+    );
+    expect(fp.aria_label).toBe("Amount in EGP");
+  });
+
+  test("a field is named by its <label for>", () => {
+    const fp = clickIn('<label for="amt">How much you pay</label><input id="amt" value="5000">', "input");
+    expect(fp.aria_label).toBe("How much you pay");
+    expect(JSON.stringify(fp)).not.toContain("5000");
+  });
+
+  test("a wrapping <label> names the field without the field's value", () => {
+    const fp = clickIn(
+      '<label>Notes <textarea>my private note</textarea></label>',
+      "textarea",
+    );
+    expect(fp.aria_label).toBe("Notes");
+    expect(JSON.stringify(fp)).not.toContain("private");
+  });
+
+  test("placeholder, then name, name an unlabelled field", () => {
+    expect(clickIn('<input placeholder="Search" name="q">', "input").aria_label).toBe("Search");
+    expect(clickIn('<input name="q">', "input").aria_label).toBe("q");
+  });
+
+  test("a labelledby target inside data-revu-mask yields no name", () => {
+    const fp = clickIn(
+      '<span id="m" data-revu-mask>Balance 9,000</span><input aria-labelledby="m">',
+      "input",
+    );
+    expect(fp.aria_label).toBeUndefined();
   });
 });
 

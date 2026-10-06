@@ -112,13 +112,15 @@
  * @typedef {object} Fingerprint
  * @property {string} tag                  Element tag (e.g. "button").
  * @property {string} [text]               Visible text (truncated; masked if sensitive).
- * @property {string} [aria_label]         Value of `aria-label` attribute when present (truncated; masked if sensitive). Lets the server name icon-only buttons that have no visible text.
- * @property {string} [title]              Value of the `title` attribute when present (truncated; masked if sensitive). Used as a fallback label after text and aria-label.
+ * @property {string} [aria_label]         The element's accessible name when it declares one: the text of its `aria-labelledby` targets, else `aria-label`, else, for a form field or button, its `<label>` text, `placeholder` or `name` (truncated; absent inside `data-revu-mask`). Never a field's value. Lets the server name icon-only buttons and form fields, which have no visible text.
+ * @property {string} [title]              Value of the `title` attribute when present (truncated; absent inside `data-revu-mask`). Used as a fallback label after text and aria-label.
  * @property {string} [role]               ARIA role / type.
  * @property {string} [id]                 Element id, if present (stable).
  * @property {string[]} [classes]          Class list (medium stability).
  * @property {string} selector             A best-effort CSS selector (fragile; tiebreaker).
  * @property {number} [ordinal]            Position among siblings.
+ * @property {boolean} [interactive]       True when the fingerprint describes an interactive element (a native control, a widget role, something focusable or with an inline click handler) that encloses or is the node hit. False when nothing interactive encloses it: the tap did nothing the page declared, so it signals confusion rather than feature use.
+ * @property {string} [target_part]        The node actually hit, as tag and first class (e.g. "svg.spark"), when it is a descendant of the interactive element the fingerprint describes.
  */
 
 /**
