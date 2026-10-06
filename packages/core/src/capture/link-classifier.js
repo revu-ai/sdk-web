@@ -20,7 +20,7 @@ import { routePath, scrubUrl } from "../utils.js";
  * denylist: HTML / JS / CSS / SVG and other "navigation" extensions stay
  * routed as normal clicks. The `download` attribute always takes precedence.
  */
-const DOWNLOAD_EXTENSIONS = /\.(pdf|csv|tsv|xlsx?|docx?|pptx?|zip|tar|gz|7z|rar|json|xml|txt|mp[34]|mov|avi|webm|webp|psd|ai|sketch|fig|exe|dmg|pkg|deb|apk|ipa|dll|iso)(\?.*)?$/i;
+const DOWNLOAD_EXTENSIONS = /\.(pdf|csv|tsv|xlsx?|docx?|pptx?|zip|tar|gz|7z|rar|json|xml|txt|mp[34]|mov|avi|webm|webp|psd|ai|sketch|fig|exe|dmg|pkg|deb|apk|ipa|dll|iso)$/i;
 
 /**
  * @typedef {object} LinkClassification
@@ -56,7 +56,7 @@ export function classifyLink(el) {
 
   if (link.hasAttribute("download") || DOWNLOAD_EXTENSIONS.test(url.pathname)) {
     const filename = link.getAttribute("download") || url.pathname.split("/").pop() || "";
-    const extMatch = url.pathname.match(/\.([a-z0-9]{2,5})(?:\?.*)?$/i);
+    const extMatch = url.pathname.match(/\.([a-z0-9]{2,5})$/i);
     return {
       eventType: "$file_download",
       properties: {
