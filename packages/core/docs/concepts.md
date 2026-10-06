@@ -214,10 +214,27 @@ shape:
   being arrived at while `properties.path` is the page being left (on an
   SPA navigation the two differ). Group page-leave metrics (engagement
   time, scroll depth) by `properties.path`, not `screen`.
-- **`fingerprint`** is present for `$autocapture` and `$rightclick`; it
-  is a semantic, weighted summary of the clicked element so the server
-  can name the action and survive DOM rewrites without an exact
-  selector.
+- **`fingerprint`** is present for `$autocapture`, `$rightclick`,
+  `$rageclick` and `$change`; it is a semantic, weighted summary of the
+  element so the server can name the action and survive DOM rewrites
+  without an exact selector. It describes the element the click acts
+  on: the nearest interactive element enclosing the node hit (a link,
+  button, form field, `<label>`, `<summary>`, an element with a widget
+  `role` such as `button` or `tab`, or one with a `tabindex` or an
+  `onclick` attribute). A tap on the icon inside a link is a tap on the
+  link. Its fields: `tag`, `text`, `role`, `id`, `classes`, `selector`,
+  `ordinal`, plus
+  - `aria_label`: the accessible name, from `aria-labelledby`, then
+    `aria-label`, then, for a form field or button, its `<label>`,
+    `placeholder` or `name`. Form fields have no `text`, so this is what
+    names them.
+  - `title`: the `title` attribute.
+  - `interactive`: `false` when nothing interactive encloses the node
+    hit, for example a tap on a chart. Such a tap did nothing the page
+    declared, so read it as a sign of confusion rather than as use of a
+    feature.
+  - `target_part`: the node actually hit, as tag and first class (for
+    example `svg.spark`), when it sits inside the element described.
 - **`context`** is the engine environment - the signals the SDK
   auto-populates, describing where the event happened. Keys are
   unprefixed and live in their own bucket, so they never collide with
@@ -282,10 +299,11 @@ The SDK records what happened, not what was entered:
 - Form submits capture form structure only (`form_id`, `form_name`,
   `action`, `method`, `field_names[]`, `field_types[]`, `field_count`).
   Never values.
-- Click fingerprints on sensitive targets (the elements above, plus
-  anything inside a `[data-revu-mask]` subtree) are redacted: tag,
-  role, and a fragile selector survive; text, `aria-label`, and `title`
-  do not.
+- Click fingerprints on sensitive targets (the elements above) carry no
+  text. Their labels (`aria_label`, `title`) are text the page author
+  wrote, so they are kept and name the field. Inside a
+  `[data-revu-mask]` subtree the labels are removed too: tag, role, and
+  a fragile selector survive.
 - When fingerprinting a non-sensitive container, the visible-text walker
   skips any sensitive descendant so a card's `innerText` cannot leak a
   child input's value.
@@ -372,7 +390,7 @@ envelope above; the rows below describe what's distinctive about each.
 |---|---|---|
 | `$autocapture` | Any click (with `fingerprint`) | `path` |
 | `$rightclick` | Right-click / context menu | `path` |
-| `$rageclick` | A burst of repeated clicks on the same element | `click_count`, `window_ms`, `path` |
+| `$rageclick` | A burst of repeated clicks on the same element, unless the burst leaves text selected inside it (a double- or triple-click to select) | `click_count`, `window_ms`, `path` |
 | `$file_download` | Click on an anchor classified as a download | `url`, `filename`, `extension`, `path` |
 | `$outbound_link` | Click on an anchor leaving the current host | `url`, `target_host`, `path` |
 | `$form_submit` | Form submitted | `form_id`, `form_name`, `action`, `method`, `field_names[]`, `field_types[]`, `field_count` (no values) |

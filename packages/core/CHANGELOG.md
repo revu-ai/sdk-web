@@ -4,6 +4,22 @@ All notable changes to `@revu-ai/core` are documented here.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **`fingerprint.interactive` and `fingerprint.target_part`.** `interactive` is `false` when nothing interactive encloses the node a click hit, for example a tap on a chart: the tap did nothing the page declared, so it signals confusion rather than use of a feature. `target_part` names the node actually hit (for example `svg.spark`) when it sits inside the element the fingerprint describes.
+
+### Changed
+
+- **A click is credited to the element it acts on.** The fingerprint describes the nearest interactive element enclosing the node hit: a link, button, form field, `<label>`, `<summary>`, an element with a widget `role`, or one with a `tabindex` or `onclick` attribute. A tap on the icon or text inside a link is a tap on the link, with the link's text and selector. Clicks that used to be recorded against an inner node now group under the element around it.
+- **Form fields are named.** `fingerprint.aria_label` is now the accessible name: `aria-labelledby`, then `aria-label`, then, for a form field or button, its `<label>`, `placeholder` or `name`. Form fields now carry their `aria_label` and `title`, which are text the page author wrote; their value and text are still never read, and inside `data-revu-mask` every label is still removed.
+- **Selecting text is not a rage click.** A burst of clicks that leaves text selected inside the clicked element (a double- or triple-click to select and copy) no longer emits `$rageclick`.
+
+### Size
+
+- **The `<script>` bundle, which includes the Web Vitals plugin, is 10.21 kB brotli; its budget is now 10.25 kB.** The npm core is 9.63 kB.
+
 ## [0.5.0] - 2026-10-02
 
 Let a site remove what the SDK keeps in the browser when a visitor withdraws consent, tell the server which plugins are installed, and make the `<script>` build installable from npm by name.

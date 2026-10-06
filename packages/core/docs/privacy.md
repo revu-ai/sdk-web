@@ -19,9 +19,12 @@ broad and enforced at the source of capture, not at the ingest endpoint.
   type allowlist: a plain `text` or `number` field is masked exactly
   like a `password` field. As an extra layer, the `$change` interaction
   event skips `password`, `file`, and `hidden` inputs entirely.
-- **Click fingerprints on sensitive targets are redacted.** Tag, role,
-  and a fragile selector survive; `text`, `aria_label`, and `title` do
-  not.
+- **Click fingerprints on sensitive targets carry no text.** A form
+  field's fingerprint never includes its value or its text. Its labels
+  (`aria_label`, from `aria-labelledby`, `aria-label`, its `<label>`,
+  `placeholder` or `name`, and `title`) are text the page author wrote,
+  so they are kept and name the field. A label referenced through
+  `aria-labelledby` that sits inside a sensitive subtree yields nothing.
 - **Container text never leaks child input values.** When fingerprinting
   a non-sensitive container, the visible-text walker skips any
   sensitive descendant, so a card's `innerText` cannot include a child
@@ -33,7 +36,7 @@ Add the attribute to any element (or any ancestor) to mark its subtree
 sensitive. The SDK honors it everywhere a sensitive element would be
 honored:
 
-- Click fingerprints inside the subtree redact text, `aria-label`, and
+- Click fingerprints inside the subtree redact text, `aria_label`, and
   `title`.
 - Form submits inside the subtree skip field-name capture entirely.
 - Container text extraction skips the subtree.
