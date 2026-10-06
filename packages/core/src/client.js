@@ -301,11 +301,8 @@ export class RevuClient {
     if (++this._preIdentifyEventCount < 5) return;
     this._identifyHintShown = true;
     console.warn(
-      "[REVU] capturing events but identify() has not been called. If this " +
-        "app has user logins, call revu.identify(userId) on login so " +
-        "logged-in people are tracked as individuals and kept separate on " +
-        "shared devices. Ignore this if your site is intentionally " +
-        "anonymous-only.",
+      "[REVU] identify() has not been called. With user logins, call " +
+        "revu.identify(userId) on login; ignore this on an anonymous-only site.",
     );
   }
 
