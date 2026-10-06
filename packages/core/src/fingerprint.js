@@ -49,32 +49,54 @@ function parentAcrossShadow(node) {
 }
 
 /**
- * What makes an element something a person acts on: native controls, ARIA
- * widget roles, anything made focusable on purpose, and inline handlers.
- * A click anywhere inside one of these acts on it, so it is the element the
- * fingerprint describes. Handlers attached in script are invisible to the
- * DOM, which is why `tabindex` and `onclick` are the only signals for a
- * container made clickable by hand.
+ * What makes an element something a person acts on, by its markup: native
+ * controls, ARIA widget roles, anything made focusable on purpose, and
+ * inline handlers. A click anywhere inside one of these acts on it, so it is
+ * the element the fingerprint describes. Handlers attached in script leave
+ * no trace in the markup; {@link interactiveTarget} catches those by the
+ * pointer cursor instead.
  */
 const INTERACTIVE =
   'a[href],button,input,select,textarea,label,summary,[contenteditable]:not([contenteditable="false"]),' +
-  "[role=button],[role=link],[role=menuitem],[role=tab],[role=checkbox],[role=radio],[role=switch],[role=option]," +
+  "[role=button],[role=link],[role=menuitem],[role=menuitemcheckbox],[role=menuitemradio],[role=tab]," +
+  "[role=checkbox],[role=radio],[role=switch],[role=option],[role=combobox],[role=treeitem],[role=slider]," +
+  "[role=spinbutton],[role=searchbox]," +
   '[tabindex]:not([tabindex="-1"]),[onclick]';
 
 /**
  * The nearest element (including `el` itself) a click on `el` acts on, or
  * null when nothing interactive encloses it. Crosses Shadow DOM boundaries.
+ *
+ * Besides the markup signals in {@link INTERACTIVE}, an element counts when
+ * it sets a pointer cursor its parent does not have. That is how a control
+ * whose click handler is attached in script (a card or a styled span in a
+ * component framework) shows the visitor it can be clicked, and the cursor
+ * inherits, so the element that sets it is the control. Costs one computed
+ * style read per ancestor walked, only on an interaction.
  * @param {Element} el
  * @returns {Element|null}
  */
 export function interactiveTarget(el) {
   /** @type {Element|null} */
   let node = el;
+  let pointer = isPointer(el);
   while (node && node.nodeType === 1) {
     if (node.matches(INTERACTIVE)) return node;
-    node = parentAcrossShadow(node);
+    const parent = parentAcrossShadow(node);
+    const parentPointer = !!parent && isPointer(parent);
+    if (pointer && !parentPointer) return node;
+    node = parent;
+    pointer = parentPointer;
   }
   return null;
+}
+
+/**
+ * @param {Element} el
+ * @returns {boolean}
+ */
+function isPointer(el) {
+  return window.getComputedStyle(el).cursor === "pointer";
 }
 
 /**

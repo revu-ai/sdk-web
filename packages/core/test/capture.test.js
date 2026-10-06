@@ -1436,6 +1436,30 @@ describe("Capture - click target and accessible name", () => {
     expect(fp.target_part).toBe("i.ic");
   });
 
+  test("a card made clickable in script is found by the pointer cursor it sets", () => {
+    const fp = clickIn(
+      '<div class="list"><div class="card" style="cursor: pointer"><h3>Gold Pound</h3><span class="price">EGP 41,000</span></div></div>',
+      "span.price",
+    );
+    expect(fp.tag).toBe("div");
+    expect(fp.classes).toEqual(["card"]);
+    expect(fp.interactive).toBe(true);
+    expect(fp.target_part).toBe("span.price");
+  });
+
+  test("a pointer inherited from a link does not stop the walk short of the link", () => {
+    const fp = clickIn('<a href="/x" style="cursor: pointer"><span><b>Go</b></span></a>', "b");
+    expect(fp.tag).toBe("a");
+  });
+
+  test("the newer widget roles are interactive", () => {
+    for (const role of ["combobox", "menuitemcheckbox", "menuitemradio", "treeitem", "slider", "spinbutton", "searchbox"]) {
+      const fp = clickIn(`<div role="${role}"><i></i></div>`, "i");
+      expect(fp.role).toBe(role);
+      expect(fp.interactive).toBe(true);
+    }
+  });
+
   test("a tap on a node nothing interactive encloses is flagged, not promoted", () => {
     const fp = clickIn('<figure><svg><circle class="gfill"></circle></svg></figure>', "circle");
     expect(fp.tag).toBe("circle");
