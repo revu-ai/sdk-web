@@ -119,7 +119,7 @@
  * @property {string[]} [classes]          Class list (medium stability).
  * @property {string} selector             A best-effort CSS selector (fragile; tiebreaker).
  * @property {number} [ordinal]            Position among siblings.
- * @property {boolean} [interactive]       True when the fingerprint describes an interactive element (a native control, a widget role, something focusable or with an inline click handler) that encloses or is the node hit. False when nothing interactive encloses it: the tap did nothing the page declared, so it signals confusion rather than feature use.
+ * @property {boolean} [interactive]       True when the fingerprint describes an interactive element (a native control, a widget role, something focusable or with an inline click handler, or an element that sets a pointer cursor its parent does not have, which is how a control made clickable in script shows it) that encloses or is the node hit. False when nothing interactive encloses it: the tap did nothing the page declared, so it signals confusion rather than feature use.
  * @property {string} [target_part]        The node actually hit, as tag and first class (e.g. "svg.spark"), when it is a descendant of the interactive element the fingerprint describes.
  */
 

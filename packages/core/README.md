@@ -3,8 +3,8 @@
 [![npm](https://img.shields.io/npm/v/@revu-ai/core.svg)](https://www.npmjs.com/package/@revu-ai/core)
 [![ci](https://github.com/revu-ai/sdk-web/actions/workflows/ci.yml/badge.svg)](https://github.com/revu-ai/sdk-web/actions/workflows/ci.yml)
 [![license](https://img.shields.io/npm/l/@revu-ai/core.svg)](https://github.com/revu-ai/sdk-web/blob/main/LICENSE)
-[![wire](https://img.shields.io/badge/brotli-9.70%20kB-blue)](#size)
-[![gzip](https://img.shields.io/badge/gzip-10.78%20kB-blue)](#size)
+[![wire](https://img.shields.io/badge/brotli-9.78%20kB-blue)](#size)
+[![gzip](https://img.shields.io/badge/gzip-10.87%20kB-blue)](#size)
 
 The lean capture core of the REVU Web SDK. One line in your page
 captures pageviews, clicks, scroll depth, form submits, downloads,
@@ -25,7 +25,7 @@ revu.capture("checkout_completed", { plan: "pro" }); // optional explicit event
 revu.reset(); // on logout
 ```
 
-ESM only. **Zero runtime dependencies.** 9.70 kB brotli on the wire, 10.78 kB gzipped.
+ESM only. **Zero runtime dependencies.** 9.78 kB brotli on the wire, 10.87 kB gzipped.
 
 ## Documentation
 
@@ -122,7 +122,7 @@ The CDN sets long-cache headers on pinned URLs (the file at a given
 version never changes), and a short cache TTL on `latest` so a release
 propagates within minutes. Every response is pre-compressed at
 publish time, so a modern browser receives the bundle as brotli
-(10.28 kB on the wire for the current version, including the bundled vitals plugin).
+(10.36 kB on the wire for the current version, including the bundled vitals plugin).
 
 If you would rather self-host, copy
 `node_modules/@revu-ai/core/dist/index.js` into your own asset
@@ -198,9 +198,9 @@ captured on those engines simply omit `context.connection_type` and
 
 | Metric                     | Current  | Budget   |
 | -------------------------- | -------- | -------- |
-| Brotli on the wire         | 9.70 kB  | 10.3 kB  |
-| Gzipped (fallback path)    | 10.78 kB | 11.85 kB |
-| Minified (parse cost)      | 35.15 kB | 38.63 kB |
+| Brotli on the wire         | 9.78 kB  | 10.5 kB  |
+| Gzipped (fallback path)    | 10.87 kB | 12.07 kB |
+| Minified (parse cost)      | 35.39 kB | 39.38 kB |
 
 All three are CI gates (`bun run size`), and all three derive from one
 number: the brotli budget. Brotli is what you actually download, because
@@ -208,7 +208,7 @@ number: the brotli budget. Brotli is what you actually download, because
 serves that variant to any browser advertising it, which every modern
 browser does. The npm core cold-loads in single-digit kilobytes; the
 `<script>` bundle, which also carries the Web Vitals plugin, gets a
-10.3 kB brotli budget, and CI enforces it on both.
+10.5 kB brotli budget, and CI enforces it on both.
 
 The other two gates are derived rather than set, so neither can be
 loosened on its own:

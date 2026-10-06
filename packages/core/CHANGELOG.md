@@ -16,13 +16,13 @@ Credit each click to the element it acts on, name form fields by their labels, s
 
 ### Changed
 
-- **A click is credited to the element it acts on.** The fingerprint describes the nearest interactive element enclosing the node hit: a link, button, form field, `<label>`, `<summary>`, an element with a widget `role`, or one with a `tabindex` or `onclick` attribute. A tap on the icon or text inside a link is a tap on the link, with the link's text and selector. Clicks that used to be recorded against an inner node now group under the element around it.
+- **A click is credited to the element it acts on.** The fingerprint describes the nearest interactive element enclosing the node hit: a link, button, form field, `<label>`, `<summary>`, an element with a widget `role`, one with a `tabindex` or `onclick` attribute, or one that sets a pointer cursor its parent does not have, so a card or button made clickable in script counts too. A tap on the icon or text inside a link is a tap on the link, with the link's text and selector. Clicks that used to be recorded against an inner node now group under the element around it.
 - **Form fields are named.** `fingerprint.aria_label` is now the accessible name: `aria-labelledby`, then `aria-label`, then, for a form field or button, its `<label>`, `placeholder` or `name`. Form fields now carry their `aria_label` and `title`, which are text the page author wrote; their value and text are still never read, and inside `data-revu-mask` every label is still removed.
 - **Selecting text is not a rage click.** A burst of clicks that leaves text selected inside the clicked element (a double- or triple-click to select and copy) no longer emits `$rageclick`.
 
 ### Size
 
-- **Bundle size: 9.70 kB brotli on the wire / 10.78 kB gzipped / 35.15 kB minified**, plus 0.83 kB brotli for the vitals plugin and 0.40 kB for the local-data plugin if you import them. The `<script>` bundle, which includes the vitals plugin, is 10.28 kB brotli; its budget is now 10.3 kB.
+- **Bundle size: 9.78 kB brotli on the wire / 10.87 kB gzipped / 35.39 kB minified**, plus 0.83 kB brotli for the vitals plugin and 0.40 kB for the local-data plugin if you import them. The `<script>` bundle, which includes the vitals plugin, is 10.36 kB brotli; its budget is now 10.5 kB.
 
 ## [0.5.0] - 2026-10-02
 

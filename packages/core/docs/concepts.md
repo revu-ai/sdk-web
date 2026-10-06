@@ -220,9 +220,10 @@ shape:
   without an exact selector. It describes the element the click acts
   on: the nearest interactive element enclosing the node hit (a link,
   button, form field, `<label>`, `<summary>`, an element with a widget
-  `role` such as `button` or `tab`, or one with a `tabindex` or an
-  `onclick` attribute). A tap on the icon inside a link is a tap on the
-  link. Its fields: `tag`, `text`, `role`, `id`, `classes`, `selector`,
+  `role` such as `button` or `tab`, one with a `tabindex` or an
+  `onclick` attribute, or one that sets a pointer cursor its parent does
+  not have, which is how a control made clickable in script shows it can
+  be clicked). A tap on the icon inside a link is a tap on the link. Its fields: `tag`, `text`, `role`, `id`, `classes`, `selector`,
   `ordinal`, plus
   - `aria_label`: the accessible name, from `aria-labelledby`, then
     `aria-label`, then, for a form field or button, its `<label>`,
