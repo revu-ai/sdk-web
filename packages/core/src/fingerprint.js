@@ -7,14 +7,15 @@
  *
  * - Form fields (`input`, `textarea`, `select`) and `[contenteditable]`
  *   regions are treated as **sensitive**. We never read their value or text
- *   content. A click whose target IS a sensitive element gets a redacted
- *   fingerprint (tag / role / selector only, no text).
+ *   content. A click on a sensitive element gets a fingerprint with no
+ *   text; its author-written labels (accessible name, `title`) are kept so
+ *   the field can be named.
  * - When fingerprinting a non-sensitive container, the visible-text extractor
  *   walks children and skips any sensitive subtree so a container's
  *   `innerText` cannot leak a child input's value.
  * - App authors can mark arbitrary regions sensitive with `[data-revu-mask]`
  *   (e.g. PII summary cards, masked balances). Honored everywhere a sensitive
- *   element would be.
+ *   element would be, and inside such a region the labels are removed too.
  */
 
 import { truncate } from "./utils.js";
