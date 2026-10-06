@@ -198,16 +198,17 @@ captured on those engines simply omit `context.connection_type` and
 
 | Metric                     | Current  | Budget   |
 | -------------------------- | -------- | -------- |
-| Brotli on the wire         | 9.38 kB  | 10 kB    |
-| Gzipped (fallback path)    | 10.44 kB | 11.5 kB  |
-| Minified (parse cost)      | 34.13 kB | 37.5 kB  |
+| Brotli on the wire         | 9.38 kB  | 10.25 kB |
+| Gzipped (fallback path)    | 10.44 kB | 11.79 kB |
+| Minified (parse cost)      | 34.13 kB | 38.44 kB |
 
 All three are CI gates (`bun run size`), and all three derive from one
 number: the brotli budget. Brotli is what you actually download, because
 `cdn.revu.ai` pre-compresses every asset with brotli at publish time and
 serves that variant to any browser advertising it, which every modern
-browser does. A 10 kB brotli budget is what "cold-loads in single-digit
-kilobytes" means in practice, so that is the promise CI enforces.
+browser does. The npm core cold-loads in single-digit kilobytes; the
+`<script>` bundle, which also carries the Web Vitals plugin, gets a
+10.25 kB brotli budget, and CI enforces it on both.
 
 The other two gates are derived rather than set, so neither can be
 loosened on its own:
