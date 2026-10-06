@@ -129,6 +129,58 @@ describe("Capture", () => {
     expect(ref === undefined || typeof ref === "string").toBe(true);
   });
 
+  describe("$pageview description", () => {
+    /** @param {string|null} content Sets (or with null, removes) the meta tag. */
+    function setDescription(content, name = "description") {
+      for (const m of document.head.querySelectorAll("meta")) m.remove();
+      if (content === null) return;
+      const meta = document.createElement("meta");
+      meta.setAttribute("name", name);
+      meta.setAttribute("content", content);
+      document.head.appendChild(meta);
+    }
+    function firstPageview() {
+      const { cap, events } = makeCapture();
+      cap.start();
+      return pageviews(events)[0].data.properties;
+    }
+
+    test("carries the meta description, whitespace collapsed", () => {
+      setDescription("  Live gold prices\n in   Egypt  ");
+      expect(firstPageview().description).toBe("Live gold prices in Egypt");
+      setDescription(null);
+    });
+
+    // `name="Description"` matches too (the selector's `i` flag); happy-dom
+    // ignores that flag, so it is checked in a real browser instead.
+
+    test("is capped at 300 characters", () => {
+      setDescription("a".repeat(400));
+      expect(firstPageview().description).toHaveLength(300);
+      setDescription(null);
+    });
+
+    test("is absent when the tag is missing or empty", () => {
+      setDescription(null);
+      expect(firstPageview().description).toBeUndefined();
+      setDescription("   ");
+      expect(firstPageview().description).toBeUndefined();
+      setDescription(null);
+    });
+
+    test("is read fresh on each single-page route change", () => {
+      setDescription("Home page");
+      const { cap, events } = makeCapture();
+      cap.start();
+      setDescription("Gold page");
+      history.pushState(null, "", "/gold");
+      const [home, gold] = pageviews(events);
+      expect(home.data.properties.description).toBe("Home page");
+      expect(gold.data.properties.description).toBe("Gold page");
+      setDescription(null);
+    });
+  });
+
   test("$pageview url redacts sensitive query values but keeps attribution params", () => {
     history.replaceState(null, "", "/welcome?token=secret123&utm_source=newsletter&page=2");
     const { cap, events } = makeCapture();

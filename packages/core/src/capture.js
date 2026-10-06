@@ -15,7 +15,7 @@
  */
 
 import { fingerprint, closestMask } from "./fingerprint.js";
-import { routePath, safe, scrubUrl } from "./utils.js";
+import { routePath, safe, scrubUrl, truncate } from "./utils.js";
 import { classifyLink } from "./capture/link-classifier.js";
 
 // ---------------------------------------------------------------------------
@@ -28,6 +28,8 @@ const SCROLL_MILESTONES = [25, 50, 75, 100];
 const SCROLL_THROTTLE_MS = 250;
 /** A burst of N clicks on the same element in this window emits $rageclick. */
 const RAGE_CLICK_THRESHOLD = 3;
+/** Longest `$pageview` description kept, in characters. Covers a search snippet with room to spare. */
+const DESCRIPTION_MAX = 300;
 const RAGE_CLICK_WINDOW_MS = 1000;
 /** How long after a resize stops we emit one $resize with the final size. */
 const RESIZE_DEBOUNCE_MS = 500;
@@ -198,6 +200,7 @@ export class Capture {
             ? scrubUrl(document.referrer) || undefined
             : undefined,
         title: typeof document !== "undefined" ? document.title || undefined : undefined,
+        description: pageDescription(),
       },
     });
   }
@@ -669,6 +672,20 @@ function composedTarget(e) {
 function composedElement(e) {
   const t = composedTarget(e);
   return t && /** @type {Node} */ (t).nodeType === 1 ? /** @type {Element} */ (t) : null;
+}
+
+/**
+ * The page's `<meta name="description">` as it stands now, so a single-page
+ * route that rewrites it is read fresh: whitespace collapsed, capped at
+ * {@link DESCRIPTION_MAX} characters, undefined when missing or empty. Read
+ * in the browser because a description set by script exists only after the
+ * page renders.
+ * @returns {string|undefined}
+ */
+function pageDescription() {
+  if (typeof document === "undefined") return undefined;
+  const meta = /** @type {HTMLMetaElement|null} */ (document.querySelector('meta[name="description" i]'));
+  return truncate(meta?.content.replace(/\s+/g, " ").trim() || undefined, DESCRIPTION_MAX);
 }
 
 /**
