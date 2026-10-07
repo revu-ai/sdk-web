@@ -135,7 +135,7 @@ By design, several categories of work live server-side:
 
 This is a hard boundary, not a temporary state. Anything that would
 require shipping a dictionary, an algorithm, or a model to the browser
-stays server-side. That is what keeps the bundle in single-digit
+stays server-side. That is what keeps the bundle at around 10
 kilobytes.
 
 ## Environment signals
