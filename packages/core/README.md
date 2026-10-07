@@ -61,7 +61,7 @@ Or load it directly from `cdn.revu.ai` (no build step required, see
 the [script tag quickstart](#plain-html-script-tag-no-bundler)):
 
 ```html
-<script async src="https://cdn.revu.ai/behavior/0.5.0"></script>
+<script async src="https://cdn.revu.ai/behavior/0.6.0"></script>
 <script>
   window.revu = window.revu || new Proxy({q:[]}, {
     get: (t, m) => m in t ? t[m] : (...a) => t.q.push([m, ...a]),
@@ -109,7 +109,7 @@ not change the bytes your page loads without warning (only the `src`
 changes):
 
 ```html
-<script async src="https://cdn.revu.ai/behavior/0.5.0"></script>
+<script async src="https://cdn.revu.ai/behavior/0.6.0"></script>
 <script>
   window.revu = window.revu || new Proxy({q:[]}, {
     get: (t, m) => m in t ? t[m] : (...a) => t.q.push([m, ...a]),
