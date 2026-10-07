@@ -30,6 +30,30 @@ broad and enforced at the source of capture, not at the ingest endpoint.
   sensitive descendant, so a card's `innerText` cannot include a child
   input's value.
 
+## What text is sent
+
+Masking keeps what visitors type out. Text the page itself shows can
+still be sent, and some of it can be personal:
+
+- **A click sends the visible text of the element it acts on**, up to
+  120 characters, as `fingerprint.text`, plus its accessible name and
+  `title` (each up to 120 characters). That element can be a whole
+  clickable card or list row, so on a page listing orders, people or
+  messages, the text can include a name or an email address. The value
+  of a form field is never sent.
+- **A page view sends the page's title and its meta description** (up
+  to 300 characters). On a profile or account page either can name the
+  person.
+- **A link click sends the link's URL**, with sensitive query values
+  redacted as described under [URLs and query strings](#urls-and-query-strings),
+  and for a download, the file name.
+
+So mark rows, cards or regions that show personal data with
+`data-revu-mask`, which removes their text and labels, and keep personal
+data out of page titles and meta descriptions. Where that is not
+possible, remove the field in
+[`beforeSend`](./configuration.md#beforesend-enrich-redact-or-drop).
+
 ## `data-revu-mask`
 
 Add the attribute to any element (or any ancestor) to mark its subtree
